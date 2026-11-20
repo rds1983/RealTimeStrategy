@@ -34,7 +34,7 @@ RealTimeStrategy/
                                  command records, snapshots + checksum (unit tested)
     Orders/                      Order types, OrderQueue, order execution
     Navigation/                 NavGrid, PathFinder (8-way A*, LOS smoothing, unit tested)
-    Movement/                    locomotion, separation, path following
+    Movement/                    MoveState + MovementSystem (steering, separation, repath)
     Combat/                      weapons, targeting, projectiles, damage
     Economy/                     resources, harvesting, supply, construction
     Production/                  queues, rally points, requirements
@@ -141,7 +141,10 @@ The game project is an `Exe` (console attached) during development so logs and c
 - `PathFinder` runs 8-way A* with an octile heuristic, reusable score/state arrays and a `PriorityQueue`. Diagonal steps require both adjacent orthogonal cells to be passable, so units cannot clip wall corners.
 - Paths are simplified with `NavGrid.HasLineOfSight` (Bresenham + orthogonal corner checks); every simplified segment is collision-free. The world-space overload returns cell centers and includes the start cell.
 - Randomized tests compare path cost against a reference Dijkstra and require ≤ 1.3× optimal; walls, blocked goals, corner traps and smoothing are covered.
-- Units follow waypoints with steering in T-012: desired velocity, acceleration, separation via `World.Spatial`, and a stuck timer that repaths or stops.
+- `MovementSystem` (T-012) is invoked by `World.Step` after commands and before final cleanup. Units with a `MoveState` follow `PathFinder` world paths toward the exact destination: accelerate toward waypoints (speed × 5, minimum 3 u/s²), advance within 0.5 units, arrive within 0.3 units, and turn toward velocity at 10 rad/s (`Facing = atan2(-vz, vx)` so models authored facing +X align).
+- Separation uses `World.Spatial` neighbors (units only, inside `radius + 1.8`): a weighted push-away vector is added to desired velocity (0.9 moving, 0.35 idle), capped at unit speed/50 %, so units spread instead of stacking.
+- Stuck detection checks displacement every 0.5 s (< 0.1 units) and whenever the next waypoint becomes blocked; it re-paths from the current position, stopping only if no route exists. Movement clamps positions to the map and never enters blocked `NavGrid` cells.
+- `World.MoveUnit`/`World.StopUnit` are the movement API for now; T-013 orders will call them. Checksums include facing, velocity and destination so movement replay is deterministic.
 - Unit-to-unit collision is soft (separation forces); buildings block movement via the nav grid. Flow-field/crowd pathfinding is out of scope for ≤ 300 units.
 
 ### Orders
@@ -261,6 +264,7 @@ Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count 
 - **World:** spawn commands apply at tick start, id lookup and map clamping, supply used/cap updates and release on removal, despawn/lethal damage deferred to tick end, unknown targets ignored, resource/tick-sensitive FNV checksums, immutable snapshots, and seeded RNG reproducibility.
 - **Spatial grid:** randomized radius queries match brute force, nearest-enemy ignores allies and range, rebuild drops despawned entities, span queries report total matches even with a small buffer, map-edge queries stay in bounds, and 1,000 radius queries over 300 units complete in ~4 ms (budget 200 ms in the test).
 - **Navigation:** nav-grid blocking/count/footprints and line-of-sight (including diagonal corner rejection); A* straights, diagonals, walls, blocked endpoints, corner traps, smoothing, world-space output, and building footprints blocking/unblocking in `World.Navigation`; 25 random obstacle maps compare path cost against reference Dijkstra within 1.3×.
+- **Movement:** arrival within tolerance and stop, facing toward velocity, wall detours, mid-route blocking with successful repath, rejection of blocked destinations/buildings, stop semantics, previous-position interpolation, five-unit anti-stacking (no pair closer than 1 unit) and deterministic movement checksums.
 - **Determinism test:** run the same seed + command script twice and compare a world checksum/snapshot.
 - **Timing tests:** `SimulationClock` covers 20 Hz accumulation across 60/20 FPS frame patterns, partial ticks and alpha, invalid elapsed input, and the 5-step catch-up clamp (excess time dropped, not banked).
 - **Rendering math:** `CameraView` tests cover frustum visibility (origin, behind camera, outside FOV, beyond far plane, near-plane intersection), world-matrix bounds culling, `LookAt` changes, aspect/projection and invalid input.

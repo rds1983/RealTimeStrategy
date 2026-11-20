@@ -169,7 +169,9 @@ public sealed class VectorFrontGame : Game
             var paletteId = EntityModels.GetPalette(_world.GetPlayer(entity.Owner).Faction);
             var model = _modelFactory.Get(EntityModels.GetModel(entity), paletteId);
 
-            _sceneRenderer.Submit(model, Matrix.CreateTranslation(position));
+            _sceneRenderer.Submit(
+                model,
+                Matrix.CreateRotationY(entity.Facing) * Matrix.CreateTranslation(position));
         }
 
         foreach (var entity in _world.Entities)

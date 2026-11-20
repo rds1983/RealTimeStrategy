@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using RealTimeStrategy.Core.Definitions;
+using RealTimeStrategy.Core.Movement;
 
 namespace RealTimeStrategy.Core.World;
 
@@ -77,6 +78,8 @@ public sealed class Entity
     public float Radius { get; }
 
     public float Speed { get; }
+
+    public MoveState? Move { get; internal set; }
 
     public bool PendingRemoval { get; internal set; }
 

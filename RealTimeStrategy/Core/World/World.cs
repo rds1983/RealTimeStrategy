@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using RealTimeStrategy.Core.Definitions;
+using RealTimeStrategy.Core.Movement;
 using RealTimeStrategy.Core.Navigation;
 
 namespace RealTimeStrategy.Core.World;
@@ -14,6 +15,7 @@ public sealed class World
     private const ulong FnvPrime = 1099511628211UL;
 
     private readonly DefinitionRegistry _definitions;
+    private readonly MovementSystem _movement;
     private readonly List<Entity> _entities = new();
     private readonly Dictionary<EntityId, Entity> _byId = new();
     private readonly List<WorldCommand> _commands = new();
@@ -26,6 +28,7 @@ public sealed class World
         _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
         Rng = new Random(seed);
         Spatial = new SpatialGrid(MapGrid.MapSize, MapGrid.CellSize);
+        _movement = new MovementSystem(Navigation);
 
         _players[PlayerId.Player] = new PlayerState(PlayerId.Player, FactionId.Concord);
         _players[PlayerId.Enemy] = new PlayerState(PlayerId.Enemy, FactionId.Null);
@@ -96,6 +99,28 @@ public sealed class World
         _commands.Add(command);
     }
 
+    /// <summary>Orders a unit to move to a world position. Returns false if no path exists.</summary>
+    public bool MoveUnit(EntityId id, Vector3 destination)
+    {
+        if (!_byId.TryGetValue(id, out var entity) || entity.Kind != EntityKind.Unit || !entity.IsAlive)
+        {
+            return false;
+        }
+
+        return _movement.SetDestination(entity, destination);
+    }
+
+    public bool StopUnit(EntityId id)
+    {
+        if (!_byId.TryGetValue(id, out var entity))
+        {
+            return false;
+        }
+
+        _movement.Stop(entity);
+        return true;
+    }
+
     public void Step(float deltaSeconds)
     {
         if (deltaSeconds < 0 || float.IsNaN(deltaSeconds) || float.IsInfinity(deltaSeconds))
@@ -109,6 +134,9 @@ public sealed class World
         }
 
         ApplyCommands();
+        RemoveDeadEntities();
+        Spatial.Rebuild(_entities);
+        _movement.Step(this, deltaSeconds);
         RemoveDeadEntities();
         Spatial.Rebuild(_entities);
         TickCount++;
@@ -158,6 +186,17 @@ public sealed class World
             hash = Mix(hash, (ulong)BitConverter.SingleToUInt32Bits(entity.Position.Z));
             hash = Mix(hash, (ulong)BitConverter.SingleToUInt32Bits(entity.Health));
             hash = Mix(hash, (ulong)BitConverter.SingleToUInt32Bits(entity.Radius));
+            hash = Mix(hash, (ulong)BitConverter.SingleToUInt32Bits(entity.Facing));
+
+            if (entity.Move is { } move)
+            {
+                hash = Mix(hash, move.HasDestination ? 1UL : 0UL);
+                hash = Mix(hash, (ulong)BitConverter.SingleToUInt32Bits(move.Velocity.X));
+                hash = Mix(hash, (ulong)BitConverter.SingleToUInt32Bits(move.Velocity.Y));
+                hash = Mix(hash, (ulong)BitConverter.SingleToUInt32Bits(move.Velocity.Z));
+                hash = Mix(hash, (ulong)BitConverter.SingleToUInt32Bits(move.Destination.X));
+                hash = Mix(hash, (ulong)BitConverter.SingleToUInt32Bits(move.Destination.Z));
+            }
         }
 
         foreach (var playerId in new[] { PlayerId.Player, PlayerId.Enemy })

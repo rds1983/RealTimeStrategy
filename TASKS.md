@@ -91,12 +91,12 @@ Goal: deterministic headless world with movement and orders.
   - `NavGrid` (60 × 60 cells, same 2-unit `MapGrid` cells but separate from `SpatialGrid`), blockers from structures/nodes/map edges, 8-way A* without corner cutting, line-of-sight path smoothing.
   - Acceptance: path found/blocked cases, no diagonal wall clipping, path length ≤ 1.3× optimal on test maps.
 
-- [ ] **T-012 — Movement and steering**
+- [x] **T-012 — Movement and steering**
   - Waypoint following with world paths from `PathFinder`, acceleration/deceleration, separation via `World.Spatial` neighbor queries, stuck detection and repath, facing/rotation toward velocity.
   - Acceptance: units reach destinations within tolerance, do not pile on one point, recover from blocked paths in tests.
 
 - [ ] **T-013 — Orders and command queue**
-  - `Order` value types (`Move`, `AttackMove`, `Attack`, `Hold`, `Stop`, `Harvest`, `ReturnCargo`, `Build`, `Produce`, `SetRally`), queue limits, validation, `OrderExecutor`; issue them as `WorldCommand`s applied by the existing tick-start queue rather than adding a second command path.
+  - `Order` value types (`Move`, `AttackMove`, `Attack`, `Hold`, `Stop`, `Harvest`, `ReturnCargo`, `Build`, `Produce`, `SetRally`), queue limits, validation, `OrderExecutor`; issue them as `WorldCommand`s applied by the existing tick-start queue rather than adding a second command path. Move/Stop delegate to `World.MoveUnit`/`World.StopUnit`; attack/hold will consume the same `MoveState`.
   - Acceptance: queue transitions, replacement rules and invalid orders covered by tests; units hold last position on `Stop`.
 
 ---
@@ -114,7 +114,7 @@ Goal: the player can select and command units with the mouse.
   - Acceptance: selection tests (empty box, mixed selection, dead entities pruned); control groups survive deaths.
 
 - [ ] **T-016 — Order issuing**
-  - Right-click context orders (move, attack, harvest, deposit, rally), `A` + click attack-move, `S` stop, `H` hold, contextual cursor feedback.
+  - Right-click context orders (move via `World.MoveUnit`, attack, harvest, deposit, rally), `A` + click attack-move, `S` stop, `H` hold, contextual cursor feedback.
   - Acceptance: each order reaches the correct entity type (rally is stored for T-024); invalid targets ignored without deselecting; integration test drives a unit across the map.
 
 - [ ] **T-017 — Selection and order visuals**
@@ -313,3 +313,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-009 | World, entities and players | 2026-11-20 | 6130721 |
 | T-010 | Spatial grid and queries | 2026-11-20 | 0ce671d |
 | T-011 | Navigation grid and A* | 2026-11-20 | f07ee62 |
+| T-012 | Movement and steering | 2026-11-20 | _pending_ |
