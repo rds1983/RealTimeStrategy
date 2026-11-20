@@ -22,11 +22,13 @@ How the prototype is built. Update this file whenever structure, dependencies or
 ```
 RealTimeStrategy.slnx
 RealTimeStrategy/
-  RealTimeStrategy.csproj        net8.0 console app, MonoGame output
-  Program.cs                     entry point, GraphicsDeviceManager setup
-  VectorFrontGame.cs             MonoGame Game subclass, hosts the frame loop
-  Assets/                        fonts, Myra styles, generated textures, audio, maps
+  RealTimeStrategy.csproj        net8.0 app, MonoGame output
+  Program.cs                     entry point
+  VectorFrontGame.cs             MonoGame Game subclass, frame loop, simulation clock wiring
+  Assets/                        runtime assets: fonts, styles, generated textures, audio, maps
   Core/                          pure simulation — no MonoGame types except Vector2/3 math
+    GameInfo.cs                  title/version metadata, safe for headless tests
+    Simulation/                  SimulationClock (fixed-step accumulator)
     Definitions/                 UnitDef, BuildingDef, WeaponDef, DefinitionRegistry
     World/                       World, Entity, PlayerState, EntityId, spawn/despawn
     Orders/                      Order types, OrderQueue, order execution
@@ -37,18 +39,27 @@ RealTimeStrategy/
     Production/                  queues, rally points, requirements
     Ai/                          scripted opponent state machine
     Math/                        fixed math helpers, geometry queries
-  Game/                          presentation and platform glue
-    Rendering/                   mesh cache, model factory, renderer, effects, debug draw
+  Presentation/                  rendering, input, UI and platform glue
+    Content/AssetPaths.cs        resolves runtime Myra asset root
+    Rendering/                   mesh cache, model factory, renderer, effects, debug overlay host
+    Ui/                          Myra markup, generated panels, HUD binding, screens
+      DebugOverlay.xmmp          design-time markup (not shipped, not loaded at runtime)
+      DebugOverlayPanel.cs       hand-written runtime behavior (kept by the exporter)
+      DebugOverlayPanel.Generated.cs  myra-export output (never edit by hand)
     Input/                       input state, picking, selection controller, command controller
     Camera/                      RtsCamera
-    Ui/                          Myra widgets, HUD binding, screens
     Audio/                       placeholder SFX hooks
   Data/                          JSON map/balance overrides (optional, later)
 RealTimeStrategy.Tests/          xUnit, ProjectReference to the game project
+  GameInfoTests.cs               headless smoke test of the Core assembly
+  Simulation/                    SimulationClock tests
+dotnet-tools.json                local tool manifest (myra-export)
 Design/                          documentation
 ```
 
-`Core` may reference `Microsoft.Xna.Framework` math structs (`Vector2`, `Vector3`) and nothing else from MonoGame. It must never touch `GraphicsDevice`, `ContentManager`, `Game`, or input devices. Tests exercise `Core` directly and simulate ticks with a fixed `float dt`.
+`Core` may reference `Microsoft.Xna.Framework` math structs (`Vector2`, `Vector3`) and nothing else from MonoGame. It must never touch `GraphicsDevice`, `ContentManager`, `Game`, `GameTime`, or input devices. Tests exercise `Core` directly and simulate ticks with a fixed `float dt`.
+
+`Presentation` is named that way (not `Game`) because a `RealTimeStrategy.Game` namespace would shadow MonoGame's `Game` type in every file under the root namespace.
 
 Rationale for two projects instead of three: the user's layout specifies one game project plus a test project. A future `RealTimeStrategy.Core` extraction is possible without changing the namespaces.
 
@@ -60,7 +71,8 @@ Rationale for two projects instead of three: the user's layout specifies one gam
 | --- | --- | --- |
 | `MonoGame.Framework.DesktopGL` | 3.8.6.1 | Window, input, rendering, audio |
 | `DigitalRiseModel.MonoGame` | 0.7.6 | `DrMesh`, `MeshPrimitives` (box, sphere, cylinder, cone, capsule, torus, disc, plane, geosphere) |
-| `Myra` | 1.6.8 | HUD, panels, buttons, dialogs |
+| `Myra` | 1.6.8 | HUD, panels, buttons, dialogs; brings FontStashSharp 1.6.2 transitively for text |
+| `myra-export` (local dotnet tool) | 1.6.8 | Exports `.xmmp` Myra markup to C# (`dotnet tool restore` once per clone) |
 | `xunit` | 2.9.2 | Unit tests |
 | `xunit.runner.visualstudio` | 2.8.2 | Test discovery/execution |
 | `Microsoft.NET.Test.Sdk` | 17.11.1 | Test host |
@@ -77,10 +89,13 @@ The game project is an `Exe` (console attached) during development so logs and c
 
 ### Tick loop
 
-- Simulation runs at a fixed **20 Hz** (`dt = 0.05 s`); rendering is uncapped/VSync.
-- `VectorFrontGame.Update` accumulates real time and runs zero or more simulation steps. Presentation interpolates entity transforms between the previous and current simulation state.
+- Simulation runs at a fixed **20 Hz** (`dt = 0.05 s`); rendering is uncapped with VSync. MonoGame's own fixed timestep is disabled (`IsFixedTimeStep = false`) so there is exactly one accumulator.
+- `SimulationClock` (`Core/Simulation`) converts real elapsed seconds into 0–5 steps per frame (0.25 s budget). Excess time — debugger pause, window drag, breakpoint — is dropped instead of banked, preventing a catch-up spiral.
+- `VectorFrontGame.Update` passes `gameTime.ElapsedGameTime` as `double` into the clock and calls `StepSimulation(0.05f)` per tick. `Core` never sees `GameTime`.
+- Presentation interpolates entity transforms between the previous and current simulation state using `SimulationClock.Alpha`.
 - All gameplay changes happen inside `World.Step(dt)`: movement, combat, economy, production, AI.
 - Input never mutates the world directly. It enqueues `Command` values; commands are validated and applied at the start of a tick.
+- `F1` toggles a debug overlay with FPS, frame ms, simulation rate, tick count and interpolation alpha. It is drawn with FontStashSharp/Rajdhani and rebuilds its text at 4 Hz into a reused `StringBuilder`.
 
 ### Determinism
 
@@ -142,21 +157,27 @@ Screen ray → ground plane for world position; entity picking uses distance-to-
 
 ## 6. UI (Myra)
 
-- `MyraEnvironment.Game = game` once at startup; a `Desktop` is the root and receives input after the game world when a modal exists.
-- Styles: a Myra stylesheet XML under `Assets/Ui/`, loaded from disk (see assets below), plus `FontSystem`/`FontSystemSharp` for the UI font.
-- HUD composition: `Panel` roots anchored to screen edges, `HorizontalStackPanel` for the top bar, `Grid` for the command card, custom `Widget` subclasses for the minimap and health bars if needed.
-- HUD reads a read-only snapshot of the world each frame; it never mutates simulation state directly — clicks enqueue commands.
-- Keyboard shortcuts remain in the input controller, not in Myra, so gameplay input works regardless of UI focus. When a text field or modal is open, gameplay input is suppressed.
-- All screens (HUD, pause, victory/defeat) are Myra widgets toggled by game state.
-
-**Risk to validate early:** Myra's MonoGame backend expects a stylesheet and fonts; verify the exact initialization and asset layout against the Myra samples in T-034 before building the HUD on top of it.
+- `VectorFrontGame.LoadContent` sets `MyraEnvironment.Game` and roots `MyraAssets.DefaultAssetManager` at `AssetPaths.UiRoot` (`<exe>/Presentation/Ui`, created on startup) before creating widgets.
+- Widget trees are authored as `.xmmp` (MML) files and exported to C# with the pinned local tool:
+  ```bash
+  powershell -ExecutionPolicy Bypass -File tools/export-ui.ps1
+  ```
+  The script restores `myra-export` (pinned in `dotnet-tools.json`) and exports every `Presentation/Ui/**/*.xmmp`. The exporter writes `<Class>.cs` (hand-editable, never overwritten) and `<Class>.Generated.cs` (always regenerated, never edit by hand). Both are committed.
+- `.xmmp` files live next to their generated C# in `Presentation/Ui/` and are **not** runtime assets: they are not copied to the output and the game never parses them.
+- Export options are stored in the markup: `Namespace`, `Class` and `FieldsVisibility="Private"`. Generated widget fields are private; the hand-written partial accesses them because it is the same class. Add `FieldsVisibility` to any new `.xmmp`.
+- Myra's asset manager is rooted at `<exe>/Presentation/Ui` (created at startup), mirroring the source folder. That keeps the relative paths stored by the exporter valid at runtime: `../../Assets/Fonts/Rajdhani-Regular.ttf:16` resolves to `RealTimeStrategy/Assets/...` during export and to `<exe>/Assets/...` at runtime. No path rewriting is needed.
+- Font syntax in MML is `<path>:<size>` for TTF/OTF. Color strings are `#RRGGBBAA` — alpha is **last**, unlike XNA's packed color format.
+- `DebugOverlay` hosts the generated `DebugOverlayPanel` (a `VerticalStackPanel` of labels) inside a transparent full-screen `Panel`; the panel itself is anchored top-left with a translucent `#040810C8` backdrop and content-sized. The panel's runtime behavior (stats, refresh, toggle) lives in the hand-written `DebugOverlayPanel.cs` partial, not in the generated file.
+- HUD shell, theme stylesheet, and input routing (`Desktop.IsMouseOverGUI`) arrive in T-034. Until then the debug overlay is the only Myra consumer.
 
 ---
 
 ## 7. Assets and content pipeline
 
 - **No MGCB content project.** Assets are read at runtime from `RealTimeStrategy/Assets` (copied to output via csproj `Content` items with `CopyToOutputDirectory=PreserveNewest`).
-- Textures needed for the prototype are generated in code (ground grid, white 1×1 pixel, selection/glow discs). Fonts and Myra styles are real files under `Assets/`.
+- Textures needed for the prototype are generated in code (ground grid, white 1×1 pixel, selection/glow discs).
+- `Assets/Fonts/Rajdhani-{Regular,SemiBold}.ttf` (SIL Open Font License 1.1, `OFL.txt` alongside) is loaded by Myra via `../../Assets/Fonts/<name>.ttf:<size>` paths from `Presentation/Ui` markup.
+- Myra markup (`Presentation/Ui/*.xmmp`) is design-time source exported to committed C#; the game does not parse XMMP at runtime and the markup is not copied to the output. Regenerating UI requires `dotnet tool restore`.
 - Maps and balance data are C# definitions initially; JSON map files can be added under `Assets/Maps` later without changing the architecture.
 - Custom `.fx` shaders are out of scope for the MVP: runtime effect compilation is not guaranteed across MonoGame backends. If shaders are added later, precompile them to `.mgfx` and document the build step.
 
@@ -172,7 +193,7 @@ Screen ray → ground plane for world position; entity picking uses distance-to-
 | Draw calls | ≤ ~400 per frame; shared mesh buffers, no per-instance mesh creation |
 | Startup | < 3 s to a playable match |
 
-Debug overlay (`F1`) shows FPS, frame ms, simulation ms, entity count, draw calls (via a counter around draws) and camera position.
+Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count and interpolation alpha. Simulation ms, entity count, draw calls and camera position are added together with their systems.
 
 ---
 
@@ -181,8 +202,9 @@ Debug overlay (`F1`) shows FPS, frame ms, simulation ms, entity count, draw call
 - **Unit tests** (`RealTimeStrategy.Tests`): definitions/validation, economy math, harvesting, supply, production queues, construction/refund, damage formula, targeting/leash, order transitions, pathfinding, win/lose conditions, AI deterministic smoke runs.
 - **Headless world tests:** `new World(seed, map)`, enqueue commands, `Step(0.05f)` N times, assert state. No graphics, no clock.
 - **Determinism test:** run the same seed + command script twice and compare a world checksum/snapshot.
+- **Timing tests:** `SimulationClock` covers 20 Hz accumulation across 60/20 FPS frame patterns, partial ticks and alpha, invalid elapsed input, and the 5-step catch-up clamp (excess time dropped, not banked).
 - **Manual smoke checklist** for rendering/UI tasks: window opens, camera pans/zooms, models visible with correct colors, no exceptions in log, 60 FPS.
-- **Smoke test:** `dotnet run --project RealTimeStrategy -- --smoke-test 30` creates the window/graphics device, renders 30 frames and exits with code 0. Use it to verify the graphics stack without interacting with the game.
+- **Smoke test:** `dotnet run --project RealTimeStrategy -- --smoke-test 30` creates the window/graphics device, renders 30 frames and exits with code 0. Add `--overlay` to force the debug overlay visible and exercise the Myra/font path. Add `--screenshot <path.png>` to save the backbuffer of the final frame — use this for visual checks instead of OS window capture.
 - Tests must be fast (< 10 s total) and must not require a display.
 
 ---

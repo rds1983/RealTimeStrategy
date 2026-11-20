@@ -28,8 +28,9 @@ You are the implementation agent for **Vector Front**, a futuristic RTS prototyp
 - Read the acceptance criteria and the design sections they reference. If they conflict, ask before guessing.
 - Plan briefly: files to add/change, data model impact, test plan. Then implement.
 - Keep the change focused. No drive-by refactors, reformatting or dependency additions.
-- Follow the architecture: `Core/` is headless simulation, `Game/` is MonoGame presentation. `Core` never references input, graphics devices or wall-clock time.
+- Follow the architecture: `Core/` is headless simulation, `Presentation/` is MonoGame presentation (rendering, input, UI). `Core` never references input, graphics devices or wall-clock time.
 - All 3D models are procedural from `MeshPrimitives`. Do not add model files or a model importer.
+- UI is authored in `Presentation/Ui/*.xmmp` and exported with the pinned `myra-export` tool: run `tools/export-ui.ps1` after editing markup. Never hand-edit `*.Generated.cs`; put runtime behavior in the hand-written `<Class>.cs` partial, which the exporter preserves. Set `FieldsVisibility="Private"` in `Project.ExportOptions` and keep generated widget fields private. Markup is design-time only — not copied to the output. Asset paths in markup are relative to `Presentation/Ui` (the runtime Myra asset root mirrors that folder), e.g. `../../Assets/Fonts/<font>.ttf:16`.
 - Add or update unit tests in the same change as the logic.
 - If you discover a required design decision, make the smallest reasonable choice, document it, and mention it in the completion report.
 
@@ -142,7 +143,7 @@ A task is done only when **all** are true and confirmed:
 ## 4. Code conventions
 
 - C# 12 / net8.0, nullable enabled, file-scoped namespaces, 4-space indentation, `_camelCase` private fields.
-- One public type per file; folders mirror namespaces (`RealTimeStrategy.Core.Combat`, `RealTimeStrategy.Game.Rendering`).
+- One public type per file; folders mirror namespaces (`RealTimeStrategy.Core.Combat`, `RealTimeStrategy.Presentation.Rendering`).
 - Prefer plain classes, readonly structs and explicit systems over frameworks, reflection or a custom ECS.
 - Simulation: pass `float dt` explicitly; no `GameTime`, `DateTime`, `Task`, or `Random` without a seed in `Core`.
 - Keep update paths allocation-free: no LINQ, closures, string formatting or `foreach` over interface-typed collections in per-tick loops.

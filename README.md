@@ -36,7 +36,13 @@ dotnet test RealTimeStrategy.Tests
 dotnet run --project RealTimeStrategy
 ```
 
-Window/graphics smoke check: `dotnet run --project RealTimeStrategy -- --smoke-test 30`
+Window/graphics smoke check: `dotnet run --project RealTimeStrategy -- --smoke-test 30` (add `--overlay` to show the debug overlay, `--screenshot out.png` to save the frame). `F1` toggles the overlay in a normal run.
+
+UI regeneration (after editing `Presentation/Ui/*.xmmp`):
+
+```bash
+powershell -ExecutionPolicy Bypass -File tools/export-ui.ps1
+```
 
 ## Documentation
 

@@ -1,0 +1,9 @@
+<Project>
+  <Project.ExportOptions Namespace="RealTimeStrategy.Presentation.Ui" Class="DebugOverlayPanel" FieldsVisibility="Private" />
+  <VerticalStackPanel Spacing="1" Padding="10" Background="#040810C8" HorizontalAlignment="Left" VerticalAlignment="Top">
+    <Label Id="_titleLabel" Text="Vector Front" Font="../../Assets/Fonts/Rajdhani-SemiBold.ttf:18" TextColor="#96E6FF" />
+    <Label Id="_statsLabel" Text="FPS --" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:16" TextColor="#C8F4FF" />
+    <Label Id="_simulationLabel" Text="Sim --" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:16" TextColor="#C8F4FF" />
+    <Label Id="_hintLabel" Text="F1 hide debug" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:14" TextColor="#6E93A8" />
+  </VerticalStackPanel>
+</Project>

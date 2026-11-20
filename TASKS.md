@@ -30,11 +30,13 @@ Goal: a window with a lit 3D scene, a working camera and a testable build.
   - Add `.gitignore`, `Assets/` subfolders, and a smoke test proving the test project runs.
   - Acceptance: `dotnet build RealTimeStrategy.slnx` and `dotnet test RealTimeStrategy.Tests` succeed from a clean clone; window opens and exits cleanly.
 
-- [ ] **T-002 — Application shell and fixed-step loop**
+- [x] **T-002 — Application shell and fixed-step loop**
   - `VectorFrontGame` with `GraphicsDeviceManager`, 1600×900 window, VSync, Esc quit.
   - Fixed 20 Hz simulation accumulator + render interpolation hooks; `GameTime` never leaks into `Core`.
-  - Debug overlay (`F1`): FPS, frame ms, sim tick, camera position; entity count appears once the world exists (T-009).
-  - Acceptance: fixed-step test (N ticks for N seconds of fake time); overlay toggles; no per-frame allocations in the loop.
+  - Myra bootstrap (`MyraEnvironment`, asset manager mirroring `Presentation/Ui`), debug panel authored in `Presentation/Ui/DebugOverlay.xmmp` and exported with `myra-export`; `F1` toggles it. Runtime behavior lives in the hand-written `DebugOverlayPanel.cs` partial.
+  - Overlay shows FPS, frame ms, simulation rate, tick count and interpolation alpha; camera position arrives with T-006, entity count with T-009.
+  - `--overlay` shows the overlay at startup; `--screenshot <file>` saves the final smoke-test frame for visual verification.
+  - Acceptance: fixed-step tests (20 ticks per simulated second at 60 and 20 FPS, catch-up clamp); overlay toggles; label text refreshed at 4 Hz, not per frame.
 
 - [ ] **T-003 — 3D rendering foundation**
   - Depth buffer, `BasicEffect` lighting (ambient + directional), camera matrices, frustum culling, draw-list API.
@@ -54,6 +56,7 @@ Goal: a window with a lit 3D scene, a working camera and a testable build.
 - [ ] **T-006 — RTS camera**
   - Focus point + yaw/pitch/distance; arrow keys/edge pan, MMB drag, wheel zoom (20–80), Q/E 45° yaw steps, map clamping.
   - Expose `FocusOn(point)` for entity-bound keys, wired in T-015.
+  - Add camera focus coordinates to the debug overlay panel (T-002).
   - Acceptance: camera math unit tests (clamping, yaw wrap, pan scaling); no gimbal flip; smooth zoom.
 
 - [ ] **T-007 — Ground, build grid and blob shadows**
@@ -74,6 +77,7 @@ Goal: deterministic headless world with movement and orders.
 - [ ] **T-009 — World, entities and players**
   - `World` with seeded RNG, `PlayerState` (alloy, energy, supply, ids), `Entity` list + lookup, spawn/despawn, deferred removal, `Step(dt)`.
   - Commands queue applied at tick start; world snapshot/checksum helper for tests.
+  - Add the entity count to the debug overlay panel (T-002).
   - Acceptance: spawn/despawn/checksum tests; same seed + commands = identical checksum.
 
 - [ ] **T-010 — Spatial grid and queries**
@@ -203,9 +207,10 @@ Goal: readable, testable combat that decides the match.
 
 Goal: a complete, understandable interface.
 
-- [ ] **T-034 — Myra bootstrap**
-  - `MyraEnvironment.Game`, `Desktop` root, font and stylesheet loading from `Assets/Ui`, input routing between world and UI.
-  - Acceptance: a test label renders over the 3D view; UI clicks do not issue world orders; documented asset layout; no MGCB dependency.
+- [ ] **T-034 — HUD root, theme and input routing**
+  - Replace the overlay-only host with a full-screen HUD root on the shared `Desktop`: debug panel + HUD layers, theme stylesheet/fonts, and a documented UI asset layout.
+  - Route input: clicks over `Desktop.IsMouseOverGUI` must not reach world picking/orders; keyboard shortcuts remain game-side; modal/focus rules defined.
+  - Acceptance: HUD and debug overlay coexist; a test label renders over the 3D view; clicks on HUD never select or issue orders; no MGCB dependency; empty HUD consumes no input.
 
 - [ ] **T-035 — Top resource bar**
   - Alloy, energy current/cap, supply used/cap, match timer with icons/glyphs.
@@ -296,3 +301,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | Task | Title | Date | Commit |
 | --- | --- | --- | --- |
 | T-001 | Solution scaffold | 2026-11-20 | 7f86ca2 |
+| T-002 | Application shell and fixed-step loop | 2026-11-20 | _pending_ |
