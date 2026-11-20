@@ -117,9 +117,9 @@ Goal: the player can select and command units with the mouse.
   - Right-click context orders issued through `World.TryIssueOrder` (move, attack, harvest, deposit, rally), with world points from `Picking.TryGetGroundPoint`; `A` + click attack-move, `S` stop, `H` hold, contextual cursor feedback.
   - Acceptance: each order reaches the correct entity type (rally is stored for T-024); invalid targets ignored without deselecting; integration test drives a unit across the map.
 
-- [ ] **T-017 — Selection and order visuals**
-  - Refine the existing hover fill / selection ring: control-group index badges, move/attack markers, invalid-placement flash, marker fade and cleanup.
-  - Acceptance: markers fade and clean up; rings interpolate with units; group indices follow recall; no visual leftovers after death.
+- [x] **T-017 — Selection and order visuals**
+  - Refine the existing hover fill / selection ring: control-group index badges, move/attack markers, marker fade and cleanup. Invalid-placement flash moves to T-022 (placement exists there).
+  - Acceptance: markers fade and clean up; rings interpolate with units; group indices follow recall; no visual leftovers after death or order expiry.
 
 ---
 
@@ -196,8 +196,8 @@ Goal: readable, testable combat that decides the match.
   - Acceptance: behavior tests for each stance; turrets never move; attack-move reaches destination after clearing enemies.
 
 - [ ] **T-032 — Damage feedback and health bars**
-  - Health bars above damaged/selected entities, hit flash, structure damage states, hover tooltip data.
-  - Acceptance: bars billboard correctly at all camera yaws/zooms; hidden at full health unless selected; no UI overlap at default view.
+  - Health bars above damaged/selected entities, hit flash, structure damage states, hover tooltip data; screen labels must not occlude the T-017 group badges.
+  - Acceptance: bars billboard correctly at all camera yaws/zooms; hidden at full health unless selected; no UI overlap at default view; badge and bar collisions resolved by hiding the lower-priority label.
 
 - [ ] **T-033 — Match state and win/lose**
   - Match phases (playing/paused/finished), Nexus-loss detection from `World.Entities` for both sides, result payload, restart.
@@ -318,3 +318,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-014 | Picking and hover | 2026-11-20 | 21b9a9d |
 | T-015 | Selection and control groups | 2026-11-20 | 5e3c909 |
 | T-016 | Order issuing | 2026-11-20 | cdf5122 |
+| T-017 | Selection and order visuals | 2026-11-20 | _pending_ |

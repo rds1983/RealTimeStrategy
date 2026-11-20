@@ -247,6 +247,8 @@ Selection rules:
 
 **Current prototype:** the HUD shows an always-visible controls legend in the top-right corner (pan/zoom/rotate/grid/debug/quit) plus the optional `F1` debug panel. The ground uses a subtle grid aligned to the 2 × 2 unit build cells; `G` overlays the brighter build grid. Resource bar, minimap, selection panel and command card are added with the systems they represent; they must not be faked earlier.
 
+Selected units in a control group wear their group number on a small dark chip above the model. Accepted orders drop a short-lived ground ring (cyan = move/rally, red = attack, green = attack-move) that expands and fades in under a second, so repeated clicks never accumulate clutter.
+
 ---
 
 ## 11. AI opponent

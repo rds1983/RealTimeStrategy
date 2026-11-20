@@ -22,6 +22,12 @@ namespace RealTimeStrategy;
 public sealed class VectorFrontGame : Game
 {
     private static readonly Color ClearColor = new(8, 10, 18);
+    private static readonly string[] GroupLabels = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" };
+    private static readonly Color BadgeFill = new(6, 16, 26, 210);
+    private static readonly Color BadgeBorder = new(110, 238, 255, 210);
+    private static readonly Color BadgeText = new(214, 250, 255);
+    private const float BadgePadding = 5f;
+    private const int BadgeBorderThickness = 1;
 
     private readonly GraphicsDeviceManager _graphics;
     private readonly int? _smokeTestFrameLimit;
@@ -47,8 +53,11 @@ public sealed class VectorFrontGame : Game
     private readonly List<SceneObject> _sceneObjects = new();
     private readonly SelectionModel _selection = new();
     private readonly OrderController _orderController;
+    private readonly OrderMarkerSystem _orderMarkers = new();
+    private readonly List<BadgeDraw> _badgeDraws = new();
     private SpriteBatch _overlayBatch = null!;
     private Texture2D _overlayPixel = null!;
+    private ScreenTextRenderer _screenText = null!;
     private bool _boxSelecting;
     private Point _boxStart;
     private Point _boxEnd;
@@ -98,6 +107,10 @@ public sealed class VectorFrontGame : Game
         _overlayBatch = new SpriteBatch(GraphicsDevice);
         _overlayPixel = new Texture2D(GraphicsDevice, 1, 1);
         _overlayPixel.SetData(new[] { Color.White });
+        _screenText = new ScreenTextRenderer(
+            GraphicsDevice,
+            AssetPaths.Font("Rajdhani-SemiBold.ttf"),
+            24f);
 
         CreateWorldScene();
 
@@ -113,6 +126,7 @@ public sealed class VectorFrontGame : Game
         _buildGridTexture.Dispose();
         _overlayBatch.Dispose();
         _overlayPixel.Dispose();
+        _screenText.Dispose();
 
         base.UnloadContent();
     }
@@ -160,6 +174,8 @@ public sealed class VectorFrontGame : Game
         {
             StepSimulation(_simulationClock.TickInterval);
         }
+
+        _orderMarkers.Update((float)elapsedSeconds);
 
         if (_smokeTestFrameLimit is null)
         {
@@ -275,8 +291,10 @@ public sealed class VectorFrontGame : Game
                 alpha: 1f);
         }
 
+        _orderMarkers.Draw(_sceneRenderer, _selectionRingMesh);
         _sceneRenderer.Render();
 
+        DrawGroupBadges(interpolationAlpha);
         DrawSelectionBox();
         _gameUi.Draw();
 
@@ -373,6 +391,8 @@ public sealed class VectorFrontGame : Game
                     _selection.Select(entity, additive: true);
                 }
             }
+
+            _selection.AssignGroup(1);
         }
     }
 
@@ -470,7 +490,22 @@ public sealed class VectorFrontGame : Game
                 ? ground
                 : null;
 
-            _orderController.IssueContext(_world, target, groundPoint, queue: shift);
+            var primary = _selection.Primary(_world);
+            var attacking =
+                target is not null &&
+                primary is not null &&
+                target.Owner != primary.Owner;
+
+            var ordered = _orderController.IssueContext(_world, target, groundPoint, queue: shift);
+
+            if (ordered > 0 && (target is not null || groundPoint is not null))
+            {
+                var markerColor = attacking
+                    ? new Color(255, 95, 120)
+                    : new Color(95, 227, 255);
+
+                _orderMarkers.Add(groundPoint ?? target!.Position, markerColor);
+            }
         }
     }
 
@@ -514,7 +549,10 @@ public sealed class VectorFrontGame : Game
                         viewport.Height,
                         out var point))
                 {
-                    _orderController.IssueAttackMove(_world, point, queue: additive);
+                    if (_orderController.IssueAttackMove(_world, point, queue: additive) > 0)
+                    {
+                        _orderMarkers.Add(point, new Color(120, 255, 180));
+                    }
                 }
 
                 _orderController.CancelAttackMove();
@@ -599,6 +637,114 @@ public sealed class VectorFrontGame : Game
         {
             _rtsCamera.FocusOn(primary.Position);
         }
+    }
+
+    /// <summary>
+    /// Draws the control-group index above each selected unit. The number sits on an opaque
+    /// chip because a bare glyph disappears against the bright unit meshes behind it.
+    /// </summary>
+    private void DrawGroupBadges(float interpolationAlpha)
+    {
+        _badgeDraws.Clear();
+
+        if (_selection.Count > 0)
+        {
+            var viewport = GraphicsDevice.Viewport;
+
+            foreach (var id in _selection.SelectedIds)
+            {
+                if (!_world.TryGetEntity(id, out var entity) ||
+                    !entity.IsAlive ||
+                    !_selection.TryGetFirstGroup(id, out var group))
+                {
+                    continue;
+                }
+
+                var position = Vector3.Lerp(entity.PreviousPosition, entity.Position, interpolationAlpha);
+                var labelPosition = position + new Vector3(0f, entity.Radius * 2f + 1.6f, 0f);
+
+                if (!Picking.TryProjectToScreen(
+                        _camera,
+                        labelPosition,
+                        viewport.Width,
+                        viewport.Height,
+                        out var screen))
+                {
+                    continue;
+                }
+
+                var text = GroupLabels[group];
+                var size = _screenText.Measure(text);
+                var chip = MathF.Ceiling(MathF.Max(size.X, size.Y)) + BadgePadding * 2f;
+
+                _badgeDraws.Add(new BadgeDraw(
+                    text,
+                    new Vector2(
+                        MathF.Round(screen.X - chip * 0.5f),
+                        MathF.Round(screen.Y - chip * 0.5f)),
+                    chip,
+                    size));
+            }
+        }
+
+        if (_badgeDraws.Count == 0)
+        {
+            return;
+        }
+
+        _overlayBatch.Begin(
+            SpriteSortMode.Deferred,
+            BlendState.AlphaBlend,
+            SamplerState.PointClamp,
+            DepthStencilState.None,
+            RasterizerState.CullNone);
+
+        foreach (var badge in _badgeDraws)
+        {
+            var left = (int)badge.Left;
+            var top = (int)badge.Top;
+            var size = (int)badge.ChipSize;
+            var bounds = new Rectangle(left, top, size, size);
+
+            _overlayBatch.Draw(_overlayPixel, bounds, BadgeFill);
+            _overlayBatch.Draw(_overlayPixel, new Rectangle(left, top, size, BadgeBorderThickness), BadgeBorder);
+            _overlayBatch.Draw(_overlayPixel, new Rectangle(left, top + size - BadgeBorderThickness, size, BadgeBorderThickness), BadgeBorder);
+            _overlayBatch.Draw(_overlayPixel, new Rectangle(left, top, BadgeBorderThickness, size), BadgeBorder);
+            _overlayBatch.Draw(_overlayPixel, new Rectangle(left + size - BadgeBorderThickness, top, BadgeBorderThickness, size), BadgeBorder);
+        }
+
+        _overlayBatch.End();
+
+        _screenText.Begin();
+
+        foreach (var badge in _badgeDraws)
+        {
+            var textPosition = new Vector2(
+                badge.Left + (badge.ChipSize - badge.TextSize.X) * 0.5f,
+                badge.Top + (badge.ChipSize - badge.TextSize.Y) * 0.5f);
+
+            _screenText.Draw(badge.Text, textPosition, BadgeText);
+        }
+
+        _screenText.End();
+    }
+
+    private readonly struct BadgeDraw
+    {
+        public BadgeDraw(string text, Vector2 topLeft, float chipSize, Vector2 textSize)
+        {
+            Text = text;
+            Left = topLeft.X;
+            Top = topLeft.Y;
+            ChipSize = chipSize;
+            TextSize = textSize;
+        }
+
+        public string Text { get; }
+        public float Left { get; }
+        public float Top { get; }
+        public float ChipSize { get; }
+        public Vector2 TextSize { get; }
     }
 
     private void DrawSelectionBox()

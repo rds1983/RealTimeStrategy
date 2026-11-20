@@ -113,6 +113,23 @@ public sealed class SelectionModel
         _groups[group] = new List<EntityId>(_selected);
     }
 
+    /// <summary>Returns the lowest control-group number containing the entity, if any.</summary>
+    public bool TryGetFirstGroup(EntityId id, out int group)
+    {
+        var best = int.MaxValue;
+
+        foreach (var pair in _groups)
+        {
+            if (pair.Key < best && pair.Value.Contains(id))
+            {
+                best = pair.Key;
+            }
+        }
+
+        group = best == int.MaxValue ? 0 : best;
+        return best != int.MaxValue;
+    }
+
     /// <summary>Replaces the selection with the surviving members of a control group.</summary>
     public bool RecallGroup(int group, WorldState world)
     {

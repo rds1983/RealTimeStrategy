@@ -12,4 +12,7 @@ public static class AssetPaths
     /// exactly as they do during <c>myra-export</c>.
     /// </summary>
     public static string UiRoot { get; } = Path.Combine(AppContext.BaseDirectory, "Presentation", "Ui");
+
+    public static string Font(string fileName) =>
+        Path.Combine(AppContext.BaseDirectory, "Assets", "Fonts", fileName);
 }

@@ -212,6 +212,51 @@ public sealed class SelectionModelTests
         Assert.Throws<ArgumentOutOfRangeException>(() => selection.AssignGroup(group));
     }
 
+    [Fact]
+    public void Group_lookup_reports_the_assigned_group()
+    {
+        var world = CreateWorld();
+        var unit = world.SpawnUnit(PlayerId.Player, UnitId.Scout, Vector3.Zero);
+        var selection = new SelectionModel();
+        selection.Select(unit, additive: false);
+        selection.AssignGroup(3);
+
+        Assert.True(selection.TryGetFirstGroup(unit.Id, out var group));
+        Assert.Equal(3, group);
+    }
+
+    [Fact]
+    public void Group_lookup_uses_the_lowest_containing_group()
+    {
+        var world = CreateWorld();
+        var first = world.SpawnUnit(PlayerId.Player, UnitId.Scout, new Vector3(-4f, 0f, 0f));
+        var second = world.SpawnUnit(PlayerId.Player, UnitId.Scout, new Vector3(4f, 0f, 0f));
+        var selection = new SelectionModel();
+        selection.Select(first, additive: false);
+        selection.Select(second, additive: true);
+        selection.AssignGroup(7);
+        selection.Select(second, additive: false);
+        selection.AssignGroup(2);
+
+        Assert.True(selection.TryGetFirstGroup(second.Id, out var secondGroup));
+        Assert.Equal(2, secondGroup);
+
+        Assert.True(selection.TryGetFirstGroup(first.Id, out var firstGroup));
+        Assert.Equal(7, firstGroup);
+    }
+
+    [Fact]
+    public void Group_lookup_fails_for_unassigned_entities()
+    {
+        var world = CreateWorld();
+        var unit = world.SpawnUnit(PlayerId.Player, UnitId.Scout, Vector3.Zero);
+        var selection = new SelectionModel();
+        selection.Select(unit, additive: false);
+
+        Assert.False(selection.TryGetFirstGroup(unit.Id, out var group));
+        Assert.Equal(0, group);
+    }
+
     private static CameraView CreateCamera()
     {
         var camera = new CameraView(MathHelper.PiOver4, 0.5f, 300f);
