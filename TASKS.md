@@ -320,4 +320,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-015 | Selection and control groups | 2026-11-20 | 5e3c909 |
 | T-016 | Order issuing | 2026-11-20 | cdf5122 |
 | T-017 | Selection and order visuals | 2026-11-20 | 14df995 |
-| T-018 | Alloy nodes and harvesting | 2026-11-20 | _pending_ |
+| T-018 | Alloy nodes and harvesting | 2026-11-20 | 1c64d9e |
