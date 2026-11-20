@@ -45,7 +45,7 @@ Goal: a window with a lit 3D scene, a working camera and a testable build.
 
 - [x] **T-004 — Procedural mesh library**
   - `MeshLibrary` wrapping `MeshPrimitives` with a parameter-based cache (box, cylinder, sphere, cone, capsule, torus, disc, plane).
-  - Dispose GPU resources on shutdown; replace the direct `MeshPrimitives` calls in the model gallery with cached lookups.
+  - Dispose GPU resources on shutdown; replace the direct `MeshPrimitives` calls in the demo scene with cached lookups.
   - Acceptance: repeated requests share one buffer; unit tests for cache keys and disposal; no leak after restart.
 
 - [x] **T-005 — Model factory and palette**
@@ -62,7 +62,7 @@ Goal: a window with a lit 3D scene, a working camera and a testable build.
 
 - [x] **T-007 — Ground, build grid and blob shadows**
   - Generated grid texture, map border, build-grid overlay toggle, fake shadows under entities; replaced the plain reference plane from T-003.
-  - Acceptance: grid aligns exactly with the 2 × 2 unit grid used by placement; shadows sit under every gallery model and will follow interpolated transforms once entities exist (T-009); F1 shows the camera's grid cell.
+  - Acceptance: grid aligns exactly with the 2 × 2 unit grid used by placement; shadows sit under every demo entity and interpolate with entity transforms; F1 shows the camera's grid cell.
 
 ---
 
@@ -75,7 +75,7 @@ Goal: deterministic headless world with movement and orders.
   - Validation tests (positive costs, ranges, footprints, required defs exist).
   - Acceptance: all MVP units/buildings defined; invalid definitions fail fast with clear messages.
 
-- [ ] **T-009 — World, entities and players**
+- [x] **T-009 — World, entities and players**
   - `World` with seeded RNG, `DefinitionRegistry`, `PlayerState` (alloy, energy, supply, ids), `Entity` list + lookup, spawn/despawn, deferred removal, `Step(dt)`; use `MapGrid.MapSize`/`MapGrid.CellSize` for bounds. Every entity references its `UnitDef`/`BuildingDef` for stats.
   - Commands queue applied at tick start; world snapshot/checksum helper for tests.
   - Entity rendering: each entity holds its cached `DrModel` and palette; the renderer submits `DrModel` at the interpolated entity transform.
@@ -96,7 +96,7 @@ Goal: deterministic headless world with movement and orders.
   - Acceptance: units reach destinations within tolerance, do not pile on one point, recover from blocked paths in tests.
 
 - [ ] **T-013 — Orders and command queue**
-  - `Order` value types (`Move`, `AttackMove`, `Attack`, `Hold`, `Stop`, `Harvest`, `ReturnCargo`, `Build`, `Produce`, `SetRally`), queue limits, validation, `OrderExecutor`.
+  - `Order` value types (`Move`, `AttackMove`, `Attack`, `Hold`, `Stop`, `Harvest`, `ReturnCargo`, `Build`, `Produce`, `SetRally`), queue limits, validation, `OrderExecutor`; issue them as `WorldCommand`s applied by the existing tick-start queue rather than adding a second command path.
   - Acceptance: queue transitions, replacement rules and invalid orders covered by tests; units hold last position on `Stop`.
 
 ---
@@ -128,7 +128,7 @@ Goal: the player can select and command units with the mouse.
 Goal: harvesting loop that the player can see and interrupt.
 
 - [ ] **T-018 — Alloy nodes and harvesting**
-  - Alloy node entities with reserves, harvester state machine (seek → harvest → return → deposit), carry capacity, timings from the design doc.
+  - Alloy node entities with reserves (add a `ResourceNode` kind to the world entity model), harvester state machine (seek → harvest → return → deposit), carry capacity, timings from the design doc.
   - Acceptance: one Harvester produces the documented rate ±5 % in simulation; tests for full/empty cargo, dead node, blocked path.
 
 - [ ] **T-019 — Resources, deposits and supply**
@@ -200,7 +200,7 @@ Goal: readable, testable combat that decides the match.
   - Acceptance: bars billboard correctly at all camera yaws/zooms; hidden at full health unless selected; no UI overlap at default view.
 
 - [ ] **T-033 — Match state and win/lose**
-  - Match phases (playing/paused/finished), Nexus-loss detection for both sides, result payload, restart.
+  - Match phases (playing/paused/finished), Nexus-loss detection from `World.Entities` for both sides, result payload, restart.
   - Acceptance: tests for simultaneous Nexus destruction, no Nexus on start (fail fast), restart returns clean state.
 
 ---
@@ -310,3 +310,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-006 | RTS camera, smooth rotation and controls HUD | 2026-11-20 | 5e75f29 |
 | T-007 | Ground, build grid and blob shadows | 2026-11-20 | 38ce3cf |
 | T-008 | Definitions and balance data | 2026-11-20 | b4cdaae |
+| T-009 | World, entities and players | 2026-11-20 | _pending_ |

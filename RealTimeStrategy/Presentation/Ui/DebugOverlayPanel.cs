@@ -27,6 +27,7 @@ public partial class DebugOverlayPanel
     private float _tickRate = SimulationClock.DefaultTickRate;
     private Vector3 _cameraFocus;
     private float _cameraDistance;
+    private int _entityCount;
 
     public DebugOverlayPanel()
     {
@@ -54,13 +55,15 @@ public partial class DebugOverlayPanel
         float interpolationAlpha,
         float tickRate,
         Vector3 cameraFocus,
-        float cameraDistance)
+        float cameraDistance,
+        int entityCount)
     {
         _tickCount = tickCount;
         _interpolationAlpha = interpolationAlpha;
         _tickRate = tickRate;
         _cameraFocus = cameraFocus;
         _cameraDistance = cameraDistance;
+        _entityCount = entityCount;
 
         if (elapsedSeconds > 0 && !double.IsNaN(elapsedSeconds) && !double.IsInfinity(elapsedSeconds))
         {
@@ -103,7 +106,7 @@ public partial class DebugOverlayPanel
 
         _simulationLabel.Text = string.Create(
             CultureInfo.InvariantCulture,
-            $"Sim {_tickRate:0} Hz  |  tick {_tickCount}  |  alpha {_interpolationAlpha:0.00}");
+            $"Sim {_tickRate:0} Hz  |  tick {_tickCount}  |  alpha {_interpolationAlpha:0.00}  |  entities {_entityCount}");
 
         _cameraLabel.Text = string.Create(
             CultureInfo.InvariantCulture,

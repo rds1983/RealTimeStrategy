@@ -46,7 +46,8 @@ public sealed class GameUi : IDisposable
         float interpolationAlpha,
         float tickRate,
         Vector3 cameraFocus,
-        float cameraDistance)
+        float cameraDistance,
+        int entityCount)
     {
         _debugOverlay.UpdateStatistics(
             elapsedSeconds,
@@ -54,7 +55,8 @@ public sealed class GameUi : IDisposable
             interpolationAlpha,
             tickRate,
             cameraFocus,
-            cameraDistance);
+            cameraDistance,
+            entityCount);
     }
 
     public void Draw() => _desktop.Render();

@@ -30,9 +30,8 @@ RealTimeStrategy/
     GameInfo.cs                  title/version metadata, safe for headless tests
     Simulation/                  SimulationClock (fixed-step accumulator)
     World/MapGrid.cs             map size, 2-unit cell conversion (unit tested)
-    Definitions/                 UnitId/BuildingId/WeaponId/FactionId, stat records,
-                                 DefinitionRegistry + DefaultDefinitions (validated, unit tested)
-    World/                       World, Entity, PlayerState, EntityId, spawn/despawn
+    World/                       World, Entity, PlayerState, EntityId, command records,
+                                 snapshots + deterministic checksum (unit tested)
     Orders/                      Order types, OrderQueue, order execution
     Navigation/                  NavGrid, AStar, Path, flow helpers
     Movement/                    locomotion, separation, path following
@@ -128,9 +127,12 @@ The game project is an `Exe` (console attached) during development so logs and c
 
 ### Entity model
 
-- `Entity` is a plain class with `EntityId Id`, `PlayerId Owner`, `EntityKind Kind`, position, radius, HP/armor, optional `MoveState`, `WeaponState`, `ProductionState`, `HarvestState`.
-- Definitions (`UnitDef`, `BuildingDef`) are immutable data records; instances hold runtime state and a reference to their definition.
-- `World` keeps entities in a `List<Entity>` plus a `Dictionary<EntityId, Entity>` and a spatial hash for range queries. Dead entities are deferred-removed after the tick.
+- `Entity` is a plain class: `EntityId`, `PlayerId`, `EntityKind`, the matching `UnitDef`/`BuildingDef` reference, `DefinitionId`, current/previous position (render interpolation), facing, health/max health, armor, radius, speed and a deferred-removal flag. Stats are copied at spawn.
+- `PlayerState` holds `FactionId`, alloy, energy and supply used/cap. Supply is maintained incrementally when units/structures spawn or are removed.
+- `World` owns the `DefinitionRegistry`, a seeded `Random`, both players, an ordered `List<Entity>` + id lookup, and a `WorldCommand` queue. `Step(dt)` copies previous positions, applies commands, removes dead/despawned entities at tick end, then increments the tick.
+- Commands are data records (`SpawnUnit`, `SpawnBuilding`, `Damage`, `Despawn`) applied only at tick start. Unknown targets are ignored; invalid commands never throw mid-tick.
+- `ComputeChecksum()` is a deterministic FNV-1a hash of tick, players and entities; `CreateSnapshot()` returns immutable entity/player snapshots for tests and replay tooling.
+- A spatial index for range queries is added in T-010.
 
 ### Navigation and movement
 
@@ -163,11 +165,11 @@ Later passes add the textured/grid ground (T-007), blob shadows, units/structure
 ### Renderer details
 
 - **Coordinates:** right-handed (`Matrix.CreateLookAt` + `CreatePerspectiveFieldOfView`), default `toLeftHanded: false` DigitalRiseModel primitives, `CullMode.CullCounterClockwiseFace`.
-- **Lens:** 45° vertical FOV, near 0.5, far 500. `RtsCamera` drives the `CameraView`; the gallery starts at focus `(0, 0)` and distance 69 so every model fits.
+- **Lens:** 45° vertical FOV, near 0.5, far 500. `RtsCamera` drives the `CameraView`; the demo world starts at focus `(0, 0)` and distance 80 (max zoom) so both bases fit.
 - **Lighting:** `BasicEffect` with per-pixel lighting, ambient `0.42`, one directional light (`0.78`, direction `(-0.45, -1, -0.35)`), specular `0.08` / power 24. No textures yet.
 - **Draw list:** `SceneRenderer` keeps a preallocated `List<MeshDrawCommand>` of `(DrMeshPart, world, diffuse, emissive, texture, alpha, transparent)`; no per-frame allocation once the list capacity is reached. `SubmittedCount` / `CulledCount` / `DrawnCount` are exposed for debugging.
-- **Model gallery:** `VectorFrontGame.CreateModelGallery` lays out every MVP model: five Concord structures, four units in each faction palette, an alloy node, a projectile and debris, on the 120 × 120 textured ground. It exists only to validate silhouettes/palettes and is replaced once the world supplies entities. The gallery currently uses 93 cached meshes for 16 `DrModel` instances and ~110 draw calls (models, border, shadows, optional grid).
-- **Ground and shadows:** the ground is a 120 × 120 plane with UV scale 60, textured by a generated 128 px tile whose edge lines map to 2-unit `MapGrid` cells. Four thin boxes mark the map border. Each gallery model submits a scaled disc at ground level (alpha 0.4, transparent pass); `ModelShadow` provides the per-`ModelId` radius. Shadows will use interpolated entity positions once T-009 exists.
+- **World rendering:** `VectorFrontGame.CreateWorldScene` instantiates the registry/world and spawns 18 demo entities (both factions, all MVP model types) through `WorldCommand`s. Each frame maps `Entity` + faction to a cached `DrModel` (`EntityModels`) and submits it at `Vector3.Lerp(PreviousPosition, Position, SimulationClock.Alpha)`. Current smoke state: 80 cached meshes, 18 models, 18 entities.
+- **Ground and shadows:** the ground is a 120 × 120 plane with UV scale 60, textured by a generated 128 px tile whose edge lines map to 2-unit `MapGrid` cells. Four thin boxes mark the map border. Every entity submits a scaled disc at its interpolated ground position (alpha 0.4, transparent pass); `ModelShadow` provides the per-`ModelId` radius.
 - **Build-grid overlay:** a second copy of the ground mesh at y = 0.03 uses a transparent cyan tile texture (alpha 120). Toggle with `G`; it defaults off and the `--build-grid` smoke flag enables it for deterministic screenshots.
 - **Transparent pass:** `SceneRenderer` collects textured/alpha commands (`SubmitTransparent`) and draws them after opaque geometry with `AlphaBlend` + `DepthRead` (no depth writes). Opaque commands use `Opaque` + `Default`.
 - **Materials:** `ModelFactory` creates three `DrMaterial`s per model (chassis, panel, accent). The accent uses a dark diffuse base (35 % of the accent) plus the full accent as emissive, so energy details stay colored instead of clipping to white.
@@ -176,7 +178,7 @@ Later passes add the textured/grid ground (T-007), blob shadows, units/structure
 
 - `MeshLibrary` (T-004) wraps `MeshPrimitives` and caches meshes by `MeshKey` (kind, dimensions, tessellation, UV scales, handedness, plane normal/back-face, cylinder cap). `MeshCache` owns the dictionary and disposal and is unit tested through an injected factory; `MeshLibrary` maps typed calls to keys and invokes the primitives.
 - The public API mirrors DigitalRiseModel's actual parameter names: cylinder `height`/`radius`/`capped`, cone `radius`/`height`, capsule `length`/`radius`, disc `radius`/`sectorAngle`; planes default to `NormalDirection.UpY` because RTS ground is horizontal. Look at the package source, not the README, when adding a shape.
-- `MeshLibrary.Count` is logged by the smoke test (currently 90 unique primitive meshes for the gallery) and confirms that identical requests share one mesh.
+- `MeshLibrary.Count` is logged by the smoke test (currently 80 unique primitive meshes for the demo world) and confirms that identical requests share one mesh.
 - `ModelFactory` (T-005) builds a `DrModel` per `(ModelId, FactionPaletteId)`: one `DrModelBone` per part, each carrying a `DrMesh` with a single `DrMeshPart` cloned from the cached primitive and a `DefaultPose` (`SrtTransform`) for its local transform. `SceneRenderer.Submit(DrModel, world)` calls `CopyAbsoluteBoneTransformsTo` and draws each mesh at `absoluteBone * world`, reading diffuse/emissive from the part's `DrMaterial`. No parallel model/material/part types are used.
 - **Ownership:** cloned parts share vertex/index buffers with the `MeshLibrary` templates. The library owns and disposes the GPU buffers; model objects are cached for the app lifetime and must not be disposed individually while the library is alive.
 - Trap: `BasicEffect.EmissiveColor` adds directly to the lit result. Bright diffuse + bright emissive clips to white; emissive materials therefore use a dark diffuse base (see the accent `DrMaterial` in `ModelFactory`).
@@ -195,7 +197,7 @@ Later passes add the textured/grid ground (T-007), blob shadows, units/structure
 - **Zoom:** mouse wheel notches adjust a target distance by 6 units; `Update(dt)` smooths toward it with a 12/s exponential and snaps under 0.01 units.
 - **Drag:** middle-mouse drag converts pixels to world units at the focus plane via `WorldUnitsPerPixel(viewportHeight)` and grabs the map (inverse X, forward Y).
 - **API:** `FocusOn(point)` (flattens Y to the ground) is ready for `H`/`Space`/minimap bindings in T-015; `Rotate`, `Pan`, `PanBy`, `Zoom`, `Update`.
-- **Gallery:** the temporary model gallery starts at distance 69 so all models fit; T-009 returns to the 45 gameplay default. Smoke runs ignore camera input so screenshots are deterministic.
+- **Demo world:** the temporary demo starts at distance 80 (max zoom) so both bases fit. Smoke runs ignore camera input so screenshots are deterministic.
 - **Debug overlay:** `Focus x, z | dist` is refreshed with the other stats at 4 Hz.
 
 ### Picking
@@ -253,7 +255,8 @@ Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count 
 ## 9. Testing strategy
 
 - **Unit tests** (`RealTimeStrategy.Tests`): definitions/validation, economy math, harvesting, supply, production queues, construction/refund, damage formula, targeting/leash, order transitions, pathfinding, win/lose conditions, AI deterministic smoke runs.
-- **Headless world tests:** `new World(seed, map)`, enqueue commands, `Step(0.05f)` N times, assert state. No graphics, no clock.
+- **Headless world tests:** `new World(registry, seed)`, enqueue commands, `Step(0.05f)` N times, assert state. No graphics, no clock.
+- **World:** spawn commands apply at tick start, id lookup and map clamping, supply used/cap updates and release on removal, despawn/lethal damage deferred to tick end, unknown targets ignored, resource/tick-sensitive FNV checksums, immutable snapshots, and seeded RNG reproducibility.
 - **Determinism test:** run the same seed + command script twice and compare a world checksum/snapshot.
 - **Timing tests:** `SimulationClock` covers 20 Hz accumulation across 60/20 FPS frame patterns, partial ticks and alpha, invalid elapsed input, and the 5-step catch-up clamp (excess time dropped, not banked).
 - **Rendering math:** `CameraView` tests cover frustum visibility (origin, behind camera, outside FOV, beyond far plane, near-plane intersection), world-matrix bounds culling, `LookAt` changes, aspect/projection and invalid input.
@@ -261,7 +264,7 @@ Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count 
 - **Mesh cache:** equal keys reuse one mesh, different keys create separate meshes, disposal releases every cached mesh exactly once, access after dispose throws, and the key includes every shape parameter with neutral defaults.
 - **Definitions:** default content counts and key balance values match the design doc; duplicate ids, missing weapon/prerequisite/produced-unit references, self-requirements, negative costs, zero health/range/cooldown/footprint, blank names and unknown id lookups all fail with messages naming the offending field.
 - **Map grid:** `MapGrid` tests cover map/cell constants, corner/center/edge conversion, cell-center round-trips and inside-map checks; the ground UV scale uses the same 2-unit cell constant, so the texture grid and build placement cannot drift.
-- **Model gallery (manual):** every `ModelId` appears with a distinct silhouette and correct palette; accents stay colored (not white); smoke output reports mesh/model counts (`90` meshes / `16` models at the time of writing).
+- **Model demo (manual):** every entity model appears with a distinct silhouette and correct palette; accents stay colored (not white); shadows sit under models; debug stats report entity count (currently 18).
 - **Manual smoke checklist** for rendering/UI tasks: window opens, camera pans/zooms, models visible with correct colors, no exceptions in log, 60 FPS.
 - **Smoke test:** `dotnet run --project RealTimeStrategy -- --smoke-test 30` creates the window/graphics device, renders 30 frames and exits with code 0. Add `--overlay` to force the debug overlay visible, `--build-grid` to show the build grid, and `--screenshot <path.png>` to save the backbuffer of the final frame — use this for visual checks instead of OS window capture.
 - Tests must be fast (< 10 s total) and must not require a display.

@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Myra;
 using RealTimeStrategy.Core;
+using RealTimeStrategy.Core.Definitions;
 using RealTimeStrategy.Core.Simulation;
 using RealTimeStrategy.Core.World;
 using RealTimeStrategy.Presentation.Camera;
@@ -34,12 +35,13 @@ public sealed class VectorFrontGame : Game
     private RtsCamera _rtsCamera = null!;
     private MeshLibrary _meshLibrary = null!;
     private ModelFactory _modelFactory = null!;
+    private DefinitionRegistry _definitions = null!;
+    private World _world = null!;
     private DrMesh _groundMesh = null!;
     private DrMesh _shadowMesh = null!;
     private Texture2D _groundTexture = null!;
     private Texture2D _buildGridTexture = null!;
     private readonly List<SceneObject> _sceneObjects = new();
-    private readonly List<GalleryItem> _gallery = new();
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
     private int _previousScrollValue;
@@ -79,7 +81,7 @@ public sealed class VectorFrontGame : Game
         _gameUi = new GameUi();
         _gameUi.SetDebugOverlayVisible(_startWithOverlay);
 
-        CreateModelGallery();
+        CreateWorldScene();
 
         base.LoadContent();
     }
@@ -137,7 +139,8 @@ public sealed class VectorFrontGame : Game
             _simulationClock.Alpha,
             SimulationClock.DefaultTickRate,
             _rtsCamera.Focus,
-            _rtsCamera.Distance);
+            _rtsCamera.Distance,
+            _world.Entities.Count);
 
         _previousKeyboard = keyboard;
         base.Update(gameTime);
@@ -158,17 +161,23 @@ public sealed class VectorFrontGame : Game
             _sceneRenderer.Submit(sceneObject.Mesh, sceneObject.World, sceneObject.Color);
         }
 
-        foreach (var galleryItem in _gallery)
+        var interpolationAlpha = _simulationClock.Alpha;
+
+        foreach (var entity in _world.Entities)
         {
-            _sceneRenderer.Submit(galleryItem.Model, galleryItem.World);
+            var position = Vector3.Lerp(entity.PreviousPosition, entity.Position, interpolationAlpha);
+            var paletteId = EntityModels.GetPalette(_world.GetPlayer(entity.Owner).Faction);
+            var model = _modelFactory.Get(EntityModels.GetModel(entity), paletteId);
+
+            _sceneRenderer.Submit(model, Matrix.CreateTranslation(position));
         }
 
-        foreach (var galleryItem in _gallery)
+        foreach (var entity in _world.Entities)
         {
-            var position = galleryItem.World.Translation;
-            var radius = ModelShadow.GetRadius(galleryItem.Id);
+            var position = Vector3.Lerp(entity.PreviousPosition, entity.Position, interpolationAlpha);
+            var shadowRadius = ModelShadow.GetRadius(EntityModels.GetModel(entity));
             var shadowWorld =
-                Matrix.CreateScale(radius * 2f, 1f, radius * 2f) *
+                Matrix.CreateScale(shadowRadius * 2f, 1f, shadowRadius * 2f) *
                 Matrix.CreateTranslation(position.X, 0.015f, position.Z);
 
             _sceneRenderer.SubmitTransparent(_shadowMesh, shadowWorld, Color.Black, alpha: 0.4f);
@@ -197,7 +206,7 @@ public sealed class VectorFrontGame : Game
                 Console.WriteLine(
                     $"Smoke test complete: drew {_drawnFrames} frames in {_wallClock.Elapsed.TotalSeconds:0.00}s; " +
                     $"sim tick {_simulationClock.TickCount} ({simulatedSeconds:0.00}s); " +
-                    $"cached meshes {_meshLibrary.Count}; models {_modelFactory.Count}.");
+                    $"cached meshes {_meshLibrary.Count}; models {_modelFactory.Count}; entities {_world.Entities.Count}.");
 
                 if (_screenshotPath != null)
                 {
@@ -210,10 +219,10 @@ public sealed class VectorFrontGame : Game
     }
 
     /// <summary>
-    /// Temporary model gallery used to validate silhouettes and palettes. Replaced by the world
-    /// renderer once entities exist (T-009).
+    /// Temporary skirmish scene used until match setup/AI arrive. Spawns all MVP model types
+    /// through the world command queue so entity rendering is exercised end to end.
     /// </summary>
-    private void CreateModelGallery()
+    private void CreateWorldScene()
     {
         _sceneRenderer = new SceneRenderer(GraphicsDevice);
         _meshLibrary = new MeshLibrary(GraphicsDevice);
@@ -227,7 +236,7 @@ public sealed class VectorFrontGame : Game
             _camera,
             new Vector2(-MapGrid.HalfSize, -MapGrid.HalfSize),
             new Vector2(MapGrid.HalfSize, MapGrid.HalfSize));
-        _rtsCamera.Zoom(-4f);
+        _rtsCamera.Zoom(-6f);
         _rtsCamera.Update(10f);
 
         _previousMouse = Mouse.GetState();
@@ -244,31 +253,42 @@ public sealed class VectorFrontGame : Game
 
         AddMapBorder();
 
-        var concord = FactionPaletteId.Concord;
-        var nullFaction = FactionPaletteId.Null;
+        _definitions = DefinitionRegistry.CreateDefault();
+        _world = new World(_definitions, seed: 12345);
+        _world.GetPlayer(PlayerId.Player).SetResources(500, 100);
+        _world.GetPlayer(PlayerId.Enemy).SetResources(500, 100);
 
-        // Buildings, Concord.
-        AddGalleryModel(ModelId.Nexus, concord, -24f, -14f);
-        AddGalleryModel(ModelId.Reactor, concord, -12f, -14f);
-        AddGalleryModel(ModelId.Fabricator, concord, 0f, -14f);
-        AddGalleryModel(ModelId.Foundry, concord, 12f, -14f);
-        AddGalleryModel(ModelId.Turret, concord, 24f, -14f);
+        QueueSpawn(PlayerId.Player, BuildingId.Nexus, -12f, -12f);
+        QueueSpawn(PlayerId.Player, BuildingId.Reactor, -17f, -17f);
+        QueueSpawn(PlayerId.Player, BuildingId.Fabricator, -5f, -12f);
+        QueueSpawn(PlayerId.Player, BuildingId.Foundry, -12f, -4f);
+        QueueSpawn(PlayerId.Player, BuildingId.Turret, -3f, -18f);
+        QueueSpawn(PlayerId.Player, UnitId.Harvester, -10f, -9f);
+        QueueSpawn(PlayerId.Player, UnitId.Scout, -6f, -8f);
+        QueueSpawn(PlayerId.Player, UnitId.Striker, -2f, -11f);
+        QueueSpawn(PlayerId.Player, UnitId.Lancer, 1f, -7f);
 
-        // Units, both palettes.
-        AddGalleryModel(ModelId.Harvester, concord, -18f, -2f);
-        AddGalleryModel(ModelId.Scout, concord, -6f, -2f);
-        AddGalleryModel(ModelId.Striker, concord, 6f, -2f);
-        AddGalleryModel(ModelId.Lancer, concord, 18f, -2f);
+        QueueSpawn(PlayerId.Enemy, BuildingId.Nexus, 12f, 12f);
+        QueueSpawn(PlayerId.Enemy, BuildingId.Reactor, 17f, 17f);
+        QueueSpawn(PlayerId.Enemy, BuildingId.Fabricator, 5f, 12f);
+        QueueSpawn(PlayerId.Enemy, BuildingId.Foundry, 12f, 4f);
+        QueueSpawn(PlayerId.Enemy, BuildingId.Turret, 3f, 18f);
+        QueueSpawn(PlayerId.Enemy, UnitId.Harvester, 10f, 9f);
+        QueueSpawn(PlayerId.Enemy, UnitId.Scout, 6f, 8f);
+        QueueSpawn(PlayerId.Enemy, UnitId.Striker, 2f, 11f);
+        QueueSpawn(PlayerId.Enemy, UnitId.Lancer, -1f, 7f);
 
-        AddGalleryModel(ModelId.Harvester, nullFaction, -18f, 7f);
-        AddGalleryModel(ModelId.Scout, nullFaction, -6f, 7f);
-        AddGalleryModel(ModelId.Striker, nullFaction, 6f, 7f);
-        AddGalleryModel(ModelId.Lancer, nullFaction, 18f, 7f);
+        _world.Step(1f / 20f);
+    }
 
-        // Props.
-        AddGalleryModel(ModelId.AlloyNode, FactionPaletteId.Neutral, -28f, 11f);
-        AddGalleryModel(ModelId.Projectile, concord, 22f, 11f, y: 1.6f);
-        AddGalleryModel(ModelId.Debris, nullFaction, 25f, 4f);
+    private void QueueSpawn(PlayerId owner, BuildingId building, float x, float z)
+    {
+        _world.Enqueue(new SpawnBuildingCommand(owner, building, new Vector3(x, 0f, z)));
+    }
+
+    private void QueueSpawn(PlayerId owner, UnitId unit, float x, float z)
+    {
+        _world.Enqueue(new SpawnUnitCommand(owner, unit, new Vector3(x, 0f, z)));
     }
 
     private void AddMapBorder()
@@ -293,14 +313,6 @@ public sealed class VectorFrontGame : Game
             vertical,
             Matrix.CreateTranslation(MapGrid.HalfSize + 0.1f, 0.15f, 0f),
             color));
-    }
-
-    private void AddGalleryModel(ModelId id, FactionPaletteId palette, float x, float z, float y = 0f)
-    {
-        _gallery.Add(new GalleryItem(
-            id,
-            _modelFactory.Get(id, palette),
-            Matrix.CreateTranslation(x, y, z)));
     }
 
     private void UpdateCamera(KeyboardState keyboard, double elapsedSeconds)
@@ -374,6 +386,7 @@ public sealed class VectorFrontGame : Game
     /// </summary>
     private void StepSimulation(float deltaSeconds)
     {
+        _world.Step(deltaSeconds);
     }
 
     private void CaptureBackBuffer(string path)
@@ -445,6 +458,4 @@ public sealed class VectorFrontGame : Game
     }
 
     private readonly record struct SceneObject(DrMesh Mesh, Matrix World, Color Color);
-
-    private readonly record struct GalleryItem(ModelId Id, DrModel Model, Matrix World);
 }
