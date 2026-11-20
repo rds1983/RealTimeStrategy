@@ -313,4 +313,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-009 | World, entities and players | 2026-11-20 | 6130721 |
 | T-010 | Spatial grid and queries | 2026-11-20 | 0ce671d |
 | T-011 | Navigation grid and A* | 2026-11-20 | f07ee62 |
-| T-012 | Movement and steering | 2026-11-20 | _pending_ |
+| T-012 | Movement and steering | 2026-11-20 | 0541a35 |
