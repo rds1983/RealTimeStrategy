@@ -70,13 +70,13 @@ Goal: a window with a lit 3D scene, a working camera and a testable build.
 
 Goal: deterministic headless world with movement and orders.
 
-- [ ] **T-008 — Definitions and balance data**
+- [x] **T-008 — Definitions and balance data**
   - Immutable `UnitDef`, `BuildingDef`, `WeaponDef`, `FactionDef` records + registry; values from `Design/GameDesign.md`.
   - Validation tests (positive costs, ranges, footprints, required defs exist).
   - Acceptance: all MVP units/buildings defined; invalid definitions fail fast with clear messages.
 
 - [ ] **T-009 — World, entities and players**
-  - `World` with seeded RNG, `PlayerState` (alloy, energy, supply, ids), `Entity` list + lookup, spawn/despawn, deferred removal, `Step(dt)`; use `MapGrid.MapSize`/`MapGrid.CellSize` for bounds.
+  - `World` with seeded RNG, `DefinitionRegistry`, `PlayerState` (alloy, energy, supply, ids), `Entity` list + lookup, spawn/despawn, deferred removal, `Step(dt)`; use `MapGrid.MapSize`/`MapGrid.CellSize` for bounds. Every entity references its `UnitDef`/`BuildingDef` for stats.
   - Commands queue applied at tick start; world snapshot/checksum helper for tests.
   - Entity rendering: each entity holds its cached `DrModel` and palette; the renderer submits `DrModel` at the interpolated entity transform.
   - Add the entity count to the debug overlay panel (T-002).
@@ -150,7 +150,7 @@ Goal: harvesting loop that the player can see and interrupt.
 Goal: place structures, build an army, expand production.
 
 - [ ] **T-022 — Placement mode and ghost preview**
-  - Footprint snapping to the `MapGrid` 2-unit cells, build-radius check, overlap/blocker check, ghost tint, rotation-free placement, cancel; temporary debug hotkey enters placement mode.
+  - Footprint snapping to `MapGrid` 2-unit cells using `BuildingDef.Footprint`, build-radius check, overlap/blocker check, ghost tint, rotation-free placement, cancel; temporary debug hotkey enters placement mode.
   - Acceptance: validity matches the nav grid exactly; test matrix for overlap, radius, nodes, map edge; ghost never blocks input after cancel.
 
 - [ ] **T-023 — Construction progress, cancel and refund**
@@ -158,7 +158,7 @@ Goal: place structures, build an army, expand production.
   - Acceptance: refund/cost tests, nav-grid updates on completion/destruction, no negative resources.
 
 - [ ] **T-024 — Production queues and rally points**
-  - Per-structure queues, cost/supply checks at enqueue, cancel with refund, spawn at exit point, rally move order; temporary debug hotkey queues each producible unit.
+  - Per-structure queues, cost/supply checks at enqueue, cancel with refund, spawn at exit point, rally move order; temporary debug hotkey queues each producible unit. Costs, build times and allowed units come from `BuildingDef` / `UnitDef` / `DefinitionRegistry`.
   - Acceptance: queue order, blocking on supply, refund on cancel, rally point applied to newly spawned units; tests.
 
 - [ ] **T-025 — Temporary command bridge**
@@ -176,7 +176,7 @@ Goal: place structures, build an army, expand production.
 Goal: readable, testable combat that decides the match.
 
 - [ ] **T-027 — Weapons and damage**
-  - Weapon state (range, cadence, projectile speed, spread), damage formula with armor classes and multipliers, overkill protection.
+  - Weapon state (range, cadence, projectile speed, spread), damage formula with armor classes and multipliers, overkill protection; all values read from `WeaponDef`.
   - Acceptance: table-driven damage tests from `GameDesign.md`; minimum damage 1; no damage from dead attackers.
 
 - [ ] **T-028 — Targeting and auto-acquire**
@@ -309,3 +309,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-005 | Model factory and palette | 2026-11-20 | 5dd25b3 |
 | T-006 | RTS camera, smooth rotation and controls HUD | 2026-11-20 | 5e75f29 |
 | T-007 | Ground, build grid and blob shadows | 2026-11-20 | 38ce3cf |
+| T-008 | Definitions and balance data | 2026-11-20 | _pending_ |

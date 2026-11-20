@@ -30,7 +30,8 @@ RealTimeStrategy/
     GameInfo.cs                  title/version metadata, safe for headless tests
     Simulation/                  SimulationClock (fixed-step accumulator)
     World/MapGrid.cs             map size, 2-unit cell conversion (unit tested)
-    Definitions/                 UnitDef, BuildingDef, WeaponDef, DefinitionRegistry
+    Definitions/                 UnitId/BuildingId/WeaponId/FactionId, stat records,
+                                 DefinitionRegistry + DefaultDefinitions (validated, unit tested)
     World/                       World, Entity, PlayerState, EntityId, spawn/despawn
     Orders/                      Order types, OrderQueue, order execution
     Navigation/                  NavGrid, AStar, Path, flow helpers
@@ -109,7 +110,7 @@ The game project is an `Exe` (console attached) during development so logs and c
 - Presentation interpolates entity transforms between the previous and current simulation state using `SimulationClock.Alpha`.
 - All gameplay changes happen inside `World.Step(dt)`: movement, combat, economy, production, AI.
 - Input never mutates the world directly. It enqueues `Command` values; commands are validated and applied at the start of a tick.
-- `F1` toggles a debug overlay with FPS, frame ms, simulation rate, tick count and interpolation alpha. It is drawn with FontStashSharp/Rajdhani and rebuilds its text at 4 Hz into a reused `StringBuilder`.
+- `F1` toggles the Myra debug panel (FPS, frame ms, simulation rate/tick/alpha, camera focus + grid cell, distance); stats refresh at 4 Hz.
 
 ### Determinism
 
@@ -117,6 +118,13 @@ The game project is an `Exe` (console attached) during development so logs and c
 - No wall-clock or frame-rate dependent logic in `Core`.
 - Iteration order is stable (lists + monotonically increasing ids), so tests can assert exact outcomes.
 - Determinism is required for tests, not (yet) for lockstep multiplayer.
+
+### Definitions
+
+- Balance data lives in `Core/Definitions` as immutable `record` types: `UnitDef`, `BuildingDef`, `WeaponDef`, `FactionDef`, plus value types `ResourceCost` and `Footprint` (in 2 × 2 unit build cells).
+- `DefaultDefinitions` mirrors `Design/GameDesign.md` (4 units, 5 structures, 4 weapons, 2 factions). Update the design tables and this file together; code is authoritative at runtime.
+- `DefinitionRegistry` validates before exposing data: unique ids, non-empty names/roles, positive health/build time/speed/radius/weapon stats, non-negative costs/supply/armor, resolves weapon/prerequisite/produced-unit references, and rejects self-requirements. All errors are aggregated into one `ArgumentException` listing each problem.
+- Gameplay systems receive the registry and never hard-code stats. The prototype build radius is `DefinitionRegistry.BuildRadiusUnits = 12`.
 
 ### Entity model
 
@@ -251,6 +259,7 @@ Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count 
 - **Rendering math:** `CameraView` tests cover frustum visibility (origin, behind camera, outside FOV, beyond far plane, near-plane intersection), world-matrix bounds culling, `LookAt` changes, aspect/projection and invalid input.
 - **RTS camera:** 15 tests cover defaults, distance/pitch, camera-relative panning, distance-scaled pan speed, map clamping, focus flattening, 45° yaw requests with smooth easing/wrapping, zoom clamping/smoothing, world-units-per-pixel, invalid bounds and viewport.
 - **Mesh cache:** equal keys reuse one mesh, different keys create separate meshes, disposal releases every cached mesh exactly once, access after dispose throws, and the key includes every shape parameter with neutral defaults.
+- **Definitions:** default content counts and key balance values match the design doc; duplicate ids, missing weapon/prerequisite/produced-unit references, self-requirements, negative costs, zero health/range/cooldown/footprint, blank names and unknown id lookups all fail with messages naming the offending field.
 - **Map grid:** `MapGrid` tests cover map/cell constants, corner/center/edge conversion, cell-center round-trips and inside-map checks; the ground UV scale uses the same 2-unit cell constant, so the texture grid and build placement cannot drift.
 - **Model gallery (manual):** every `ModelId` appears with a distinct silhouette and correct palette; accents stay colored (not white); smoke output reports mesh/model counts (`90` meshes / `16` models at the time of writing).
 - **Manual smoke checklist** for rendering/UI tasks: window opens, camera pans/zooms, models visible with correct colors, no exceptions in log, 60 FPS.
