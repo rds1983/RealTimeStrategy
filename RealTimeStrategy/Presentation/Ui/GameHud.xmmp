@@ -5,6 +5,10 @@
     <Label Text="Pan   Arrows / screen edge / MMB drag" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
     <Label Text="Zoom   Mouse wheel" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
     <Label Text="Rotate   Q / E" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
+    <Label Text="Select   LMB / drag" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
+    <Label Text="Add   Shift" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
+    <Label Text="Groups   Ctrl+1..9 / 1..9" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
+    <Label Text="Focus   Backspace / Space" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
     <Label Text="Grid   G" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
     <Label Text="Debug   F1" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
     <Label Text="Quit   Esc" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />

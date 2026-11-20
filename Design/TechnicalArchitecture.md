@@ -59,7 +59,7 @@ RealTimeStrategy/
       DebugOverlay.xmmp          debug stats markup (not shipped, not loaded at runtime)
       DebugOverlayPanel.cs       hand-written runtime behavior (kept by the exporter)
       DebugOverlayPanel.Generated.cs  myra-export output (never edit by hand)
-    Input/                       input state, picking/selection controller, command controller
+    Input/                       input state, picking, SelectionModel, command controller
     Camera/CameraView.cs         view/projection matrices + frustum culling (unit tested)
     Camera/RtsCamera.cs          focus/yaw/zoom controller, map clamping, focus helpers
     Audio/                       placeholder SFX hooks
@@ -209,11 +209,21 @@ Later passes add the textured/grid ground (T-007), blob shadows, units/structure
 
 ### Picking
 
-- `Picking.GetRay` unprojects the cursor through `inverse(View * Projection)` (NDC with top-left screen coordinates) and returns a normalized world ray. `TryGetGroundPoint` intersects that ray with `y = 0`, rejecting rays that are parallel or point away from the ground.
+- `Picking.GetRay` unprojects the cursor through `inverse(View * Projection)` (NDC with top-left screen coordinates) and returns a normalized world ray. **Trap:** use `Vector4.Transform` and divide by W; `Vector3.Transform` skips the perspective divide and collapses off-center rays toward the focus.
+- `TryGetGroundPoint` intersects that ray with `y = 0`, rejecting rays that are parallel or point away from the ground.
 - `PickEntity` tests each living entity's vertical proxy sphere (center at `position + radius·up`, radius `2×entity radius`) and returns the closest unit; only if no unit is hit does it return the closest structure. Units take priority even when a structure is nearer.
-- Hover is refreshed every frame only when the window is active, the cursor is inside the client area and not over the HUD. The hover highlight is a cyan translucent disc at `y = 0.04`, drawn in the transparent pass.
-- Picking is pure presentation math over `World`/`CameraView` and covered by known-camera tests at 20/45/80 zoom; box selection and click-to-select integration arrive in T-015.
-- Input routing currently checks the HUD rectangle; full `Desktop`-based routing is T-034.
+- Hover is refreshed every frame only when the window is active, the cursor is inside the client area and not over the HUD. `GameUi.IsPointerOverHud` converts the point with `Widget.ToLocal` because Myra's `Bounds` is local to the widget (using `Bounds.Contains(screenPoint)` checks the wrong rectangle).
+- Selected/hovered entities draw cyan ground discs in the transparent pass. That pass disables lighting and back-face culling: primitive discs are horizontal and lighting a downward/zero normal renders them black.
+- Picking is pure presentation math over `World`/`CameraView` and covered by known-camera tests at 20/45/80 zoom plus off-center round-trip tests; box selection and click-to-select integration live in `SelectionModel`.
+
+### Selection
+
+- `SelectionModel` stores entity ids (not object references), so pruning and control groups never hold dead entities. It prunes dead/missing ids every frame; `Primary` prefers the first selected unit, otherwise the first living entity.
+- Click selection uses `Picking.PickEntity`; clicking a structure replaces the selection with that structure. Shift-click adds (mixed selections are allowed, with units primary).
+- Drag selection projects unit positions with `Viewport.Project` and selects only units whose screen centers fall in the rectangle; empty boxes clear unless Shift is held. A 5 px movement threshold distinguishes click from drag.
+- Drag feedback is a SpriteBatch rectangle overlay (fill + 1 px border). Hover uses a soft filled cyan disc (alpha 0.22); selection uses a bright thin cyan torus ring (alpha 0.95) at the entity's base, so the two states are visually distinct. T-017 refines group/order markers.
+- `Ctrl+1…9` snapshots the current selection into a control group; `1…9` recalls surviving members (empty groups clear the selection). `Backspace` focuses the player Nexus, `Space` the primary selection via `RtsCamera.FocusOn`.
+- Selection input is ignored over the HUD and outside the client area.
 
 ---
 
@@ -272,7 +282,8 @@ Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count 
 - **Navigation:** nav-grid blocking/count/footprints and line-of-sight (including diagonal corner rejection); A* straights, diagonals, walls, blocked endpoints, corner traps, smoothing, world-space output, and building footprints blocking/unblocking in `World.Navigation`; 25 random obstacle maps compare path cost against reference Dijkstra within 1.3×.
 - **Movement:** arrival within tolerance and stop, facing toward velocity, wall detours, mid-route blocking with successful repath, rejection of blocked destinations/buildings, stop semantics, previous-position interpolation, five-unit anti-stacking (no pair closer than 1 unit) and deterministic movement checksums.
 - **Orders:** tick-start application, queue completion, sequential queued moves, replace semantics, capacity 4, stop/hold position retention, invalid targets/points/types/buildings, dead-target rejection and mid-queue replacement.
-- **Picking:** ground point from a known camera, center-ray unit hit, misses, closest-unit selection, unit-over-structure priority, working at 20/45/80 zoom, dead entities ignored, empty world, and invalid viewport rejection.
+- **Picking:** ground point from a known camera, center-ray unit hit, misses, closest-unit selection, unit-over-structure priority, working at 20/45/80 zoom, off-center projection→ground round-trips, off-center entity hits, dead entities ignored, empty world, and invalid viewport rejection.
+- **Selection:** click replace, shift-add, structure-only click, unit-preferred primary, units-only box selection, empty-box clearing, dead pruning, control-group assign/recall, groups surviving deaths, empty-group clearing and invalid group rejection. Click selection was also verified live against the game window.
 - **Determinism test:** run the same seed + command script twice and compare a world checksum/snapshot.
 - **Timing tests:** `SimulationClock` covers 20 Hz accumulation across 60/20 FPS frame patterns, partial ticks and alpha, invalid elapsed input, and the 5-step catch-up clamp (excess time dropped, not banked).
 - **Rendering math:** `CameraView` tests cover frustum visibility (origin, behind camera, outside FOV, beyond far plane, near-plane intersection), world-matrix bounds culling, `LookAt` changes, aspect/projection and invalid input.
@@ -282,7 +293,7 @@ Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count 
 - **Map grid:** `MapGrid` tests cover map/cell constants, corner/center/edge conversion, cell-center round-trips and inside-map checks; the ground UV scale uses the same 2-unit cell constant, so the texture grid and build placement cannot drift.
 - **Model demo (manual):** every entity model appears with a distinct silhouette and correct palette; accents stay colored (not white); shadows sit under models; debug stats report entity count (currently 18).
 - **Manual smoke checklist** for rendering/UI tasks: window opens, camera pans/zooms, models visible with correct colors, no exceptions in log, 60 FPS.
-- **Smoke test:** `dotnet run --project RealTimeStrategy -- --smoke-test 30` creates the window/graphics device, renders 30 frames and exits with code 0. Add `--overlay` to force the debug overlay visible, `--build-grid` to show the build grid, and `--screenshot <path.png>` to save the backbuffer of the final frame — use this for visual checks instead of OS window capture.
+- **Smoke test:** `dotnet run --project RealTimeStrategy -- --smoke-test 30` creates the window/graphics device, renders 30 frames and exits with code 0. Add `--overlay` to force the debug overlay visible, `--build-grid` to show the build grid, `--select-all` to preselect the player's units (useful for selection-highlight screenshots), and `--screenshot <path.png>` to save the backbuffer of the final frame — use this for visual checks instead of OS window capture.
 - Tests must be fast (< 10 s total) and must not require a display.
 
 ---

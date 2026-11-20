@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using RealTimeStrategy.Core.World;
 using RealTimeStrategy.Presentation.Camera;
 using WorldState = RealTimeStrategy.Core.World.World;
@@ -31,8 +32,8 @@ public static class Picking
         var ndcY = 1f - 2f * screenPosition.Y / viewportHeight;
         var inverse = Matrix.Invert(camera.View * camera.Projection);
 
-        var near = Vector3.Transform(new Vector3(ndcX, ndcY, 0f), inverse);
-        var far = Vector3.Transform(new Vector3(ndcX, ndcY, 1f), inverse);
+        var near = Unproject(new Vector3(ndcX, ndcY, 0f), inverse);
+        var far = Unproject(new Vector3(ndcX, ndcY, 1f), inverse);
         var direction = far - near;
 
         if (direction.LengthSquared() < MinimumDirectionLengthSquared)
@@ -41,6 +42,12 @@ public static class Picking
         }
 
         return new Ray(near, Vector3.Normalize(direction));
+    }
+
+    private static Vector3 Unproject(Vector3 ndc, Matrix inverseViewProjection)
+    {
+        var clip = Vector4.Transform(new Vector4(ndc, 1f), inverseViewProjection);
+        return new Vector3(clip.X / clip.W, clip.Y / clip.W, clip.Z / clip.W);
     }
 
     public static bool TryGetGroundPoint(
@@ -77,8 +84,7 @@ public static class Picking
         Point screenPosition,
         int viewportWidth,
         int viewportHeight)
-    {
-        ArgumentNullException.ThrowIfNull(world);
+    {        ArgumentNullException.ThrowIfNull(world);
 
         var ray = GetRay(camera, screenPosition, viewportWidth, viewportHeight);
         Entity? bestUnit = null;
@@ -118,5 +124,65 @@ public static class Picking
         }
 
         return bestUnit ?? bestBuilding;
+    }
+
+    /// <summary>Projects a world position to screen pixels; false when behind the camera.</summary>
+    public static bool TryProjectToScreen(
+        CameraView camera,
+        Vector3 worldPosition,
+        int viewportWidth,
+        int viewportHeight,
+        out Vector2 screenPosition)
+    {
+        ArgumentNullException.ThrowIfNull(camera);
+
+        var viewport = new Viewport(0, 0, viewportWidth, viewportHeight);
+        var projected = viewport.Project(
+            worldPosition,
+            camera.Projection,
+            camera.View,
+            Matrix.Identity);
+
+        if (projected.Z < 0f || projected.Z > 1f)
+        {
+            screenPosition = default;
+            return false;
+        }
+
+        screenPosition = new Vector2(projected.X, projected.Y);
+        return true;
+    }
+
+    /// <summary>Fills the list with living units whose screen centers fall inside the rectangle.</summary>
+    public static void QueryUnitsInRectangle(
+        WorldState world,
+        CameraView camera,
+        Rectangle rectangle,
+        int viewportWidth,
+        int viewportHeight,
+        List<Entity> results)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(results);
+        results.Clear();
+
+        foreach (var entity in world.Entities)
+        {
+            if (entity.Kind != EntityKind.Unit || !entity.IsAlive)
+            {
+                continue;
+            }
+
+            if (TryProjectToScreen(
+                    camera,
+                    entity.Position,
+                    viewportWidth,
+                    viewportHeight,
+                    out var screen) &&
+                rectangle.Contains(screen))
+            {
+                results.Add(entity);
+            }
+        }
     }
 }

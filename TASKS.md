@@ -109,7 +109,7 @@ Goal: the player can select and command units with the mouse.
   - Screen ray → ground plane, entity hit test with bounding radius, units prioritized over structures, hover highlight.
   - Acceptance: picking tests with known camera setups; hover works at all zoom levels; input routing leaves room for HUD exclusion in T-034.
 
-- [ ] **T-015 — Selection and control groups**
+- [x] **T-015 — Selection and control groups**
   - Click select via `Picking.PickEntity`, drag box (shift adds), structures vs. units rules, `Ctrl+1…9` assignment and recall, `Backspace` focuses the Nexus and `Space` the selection via `RtsCamera.FocusOn`.
   - Acceptance: selection tests (empty box, mixed selection, dead entities pruned); control groups survive deaths.
 
@@ -118,8 +118,8 @@ Goal: the player can select and command units with the mouse.
   - Acceptance: each order reaches the correct entity type (rally is stored for T-024); invalid targets ignored without deselecting; integration test drives a unit across the map.
 
 - [ ] **T-017 — Selection and order visuals**
-  - Selection rings, group indicators, move/attack markers, invalid-placement flash.
-  - Acceptance: markers fade and clean up; rings interpolate with units; no visual leftovers after death.
+  - Refine the existing hover fill / selection ring: control-group index badges, move/attack markers, invalid-placement flash, marker fade and cleanup.
+  - Acceptance: markers fade and clean up; rings interpolate with units; group indices follow recall; no visual leftovers after death.
 
 ---
 
@@ -316,3 +316,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-012 | Movement and steering | 2026-11-20 | 0541a35 |
 | T-013 | Orders and command queue | 2026-11-20 | 1d3f056 |
 | T-014 | Picking and hover | 2026-11-20 | 21b9a9d |
+| T-015 | Selection and control groups | 2026-11-20 | _pending_ |

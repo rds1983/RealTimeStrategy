@@ -38,7 +38,8 @@ public sealed class GameUi : IDisposable
 
     public void ToggleDebugOverlay() => _debugOverlay.Toggle();
 
-    public bool IsPointerOverHud(Point point) => _hud.Visible && _hud.Bounds.Contains(point);
+    public bool IsPointerOverHud(Point point) =>
+        _hud.Visible && _hud.Bounds.Contains(_hud.ToLocal(point));
 
     public void UpdateDebugStats(
         double elapsedSeconds,
@@ -47,7 +48,8 @@ public sealed class GameUi : IDisposable
         float tickRate,
         Vector3 cameraFocus,
         float cameraDistance,
-        int entityCount)
+        int entityCount,
+        int selectionCount)
     {
         _debugOverlay.UpdateStatistics(
             elapsedSeconds,
@@ -56,7 +58,8 @@ public sealed class GameUi : IDisposable
             tickRate,
             cameraFocus,
             cameraDistance,
-            entityCount);
+            entityCount,
+            selectionCount);
     }
 
     public void Draw() => _desktop.Render();

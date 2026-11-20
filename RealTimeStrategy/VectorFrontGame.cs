@@ -26,6 +26,7 @@ public sealed class VectorFrontGame : Game
     private readonly GraphicsDeviceManager _graphics;
     private readonly int? _smokeTestFrameLimit;
     private readonly bool _startWithOverlay;
+    private readonly bool _selectAllOnStart;
     private readonly string? _screenshotPath;
     private readonly Stopwatch _wallClock = new();
 
@@ -40,9 +41,16 @@ public sealed class VectorFrontGame : Game
     private World _world = null!;
     private DrMesh _groundMesh = null!;
     private DrMesh _shadowMesh = null!;
+    private DrMesh _selectionRingMesh = null!;
     private Texture2D _groundTexture = null!;
     private Texture2D _buildGridTexture = null!;
     private readonly List<SceneObject> _sceneObjects = new();
+    private readonly SelectionModel _selection = new();
+    private SpriteBatch _overlayBatch = null!;
+    private Texture2D _overlayPixel = null!;
+    private bool _boxSelecting;
+    private Point _boxStart;
+    private Point _boxEnd;
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
     private int _previousScrollValue;
@@ -68,6 +76,7 @@ public sealed class VectorFrontGame : Game
 
         _smokeTestFrameLimit = ParseSmokeTestFrameLimit(args);
         _startWithOverlay = args?.Contains("--overlay") == true;
+        _selectAllOnStart = args?.Contains("--select-all") == true;
         _showBuildGrid = args?.Contains("--build-grid") == true;
         _screenshotPath = ParseOptionValue(args, "--screenshot");
         _wallClock.Start();
@@ -83,6 +92,10 @@ public sealed class VectorFrontGame : Game
         _gameUi = new GameUi();
         _gameUi.SetDebugOverlayVisible(_startWithOverlay);
 
+        _overlayBatch = new SpriteBatch(GraphicsDevice);
+        _overlayPixel = new Texture2D(GraphicsDevice, 1, 1);
+        _overlayPixel.SetData(new[] { Color.White });
+
         CreateWorldScene();
 
         base.LoadContent();
@@ -95,6 +108,8 @@ public sealed class VectorFrontGame : Game
         _meshLibrary.Dispose();
         _groundTexture.Dispose();
         _buildGridTexture.Dispose();
+        _overlayBatch.Dispose();
+        _overlayPixel.Dispose();
 
         base.UnloadContent();
     }
@@ -127,8 +142,11 @@ public sealed class VectorFrontGame : Game
 
         if (_smokeTestFrameLimit is null)
         {
-            UpdateCamera(keyboard, elapsedSeconds);
-            UpdateHover();
+            var mouse = Mouse.GetState();
+            _selection.Prune(_world);
+            HandleSelectionInput(keyboard, mouse);
+            UpdateCamera(keyboard, elapsedSeconds, mouse);
+            UpdateHover(mouse);
         }
         else
         {
@@ -143,7 +161,8 @@ public sealed class VectorFrontGame : Game
             SimulationClock.DefaultTickRate,
             _rtsCamera.Focus,
             _rtsCamera.Distance,
-            _world.Entities.Count);
+            _world.Entities.Count,
+            _selection.Count);
 
         _previousKeyboard = keyboard;
         base.Update(gameTime);
@@ -199,8 +218,28 @@ public sealed class VectorFrontGame : Game
             _sceneRenderer.SubmitTransparent(
                 _shadowMesh,
                 hoverWorld,
-                new Color(95, 227, 255),
-                alpha: 0.55f);
+                new Color(150, 215, 245),
+                alpha: 0.22f);
+        }
+
+        foreach (var selectedId in _selection.SelectedIds)
+        {
+            if (!_world.TryGetEntity(selectedId, out var selected) || !selected.IsAlive)
+            {
+                continue;
+            }
+
+            var position = Vector3.Lerp(selected.PreviousPosition, selected.Position, interpolationAlpha);
+            var radius = selected.Radius * 2.2f;
+            var selectionWorld =
+                Matrix.CreateScale(radius, 1f, radius) *
+                Matrix.CreateTranslation(position.X, 0.05f, position.Z);
+
+            _sceneRenderer.SubmitTransparent(
+                _selectionRingMesh,
+                selectionWorld,
+                new Color(110, 238, 255),
+                alpha: 0.95f);
         }
 
         if (_showBuildGrid)
@@ -215,6 +254,7 @@ public sealed class VectorFrontGame : Game
 
         _sceneRenderer.Render();
 
+        DrawSelectionBox();
         _gameUi.Draw();
 
         if (_smokeTestFrameLimit is int limit)
@@ -270,6 +310,7 @@ public sealed class VectorFrontGame : Game
             uScale: MapGrid.CellCount,
             vScale: MapGrid.CellCount);
         _shadowMesh = _meshLibrary.GetDisc(0.5f, 24);
+        _selectionRingMesh = _meshLibrary.GetTorus(0.5f, 0.045f, 32);
 
         AddMapBorder();
 
@@ -299,6 +340,17 @@ public sealed class VectorFrontGame : Game
         QueueSpawn(PlayerId.Enemy, UnitId.Lancer, -1f, 7f);
 
         _world.Step(1f / 20f);
+
+        if (_selectAllOnStart)
+        {
+            foreach (var entity in _world.Entities)
+            {
+                if (entity.Owner == PlayerId.Player && entity.Kind == EntityKind.Unit)
+                {
+                    _selection.Select(entity, additive: true);
+                }
+            }
+        }
     }
 
     private void QueueSpawn(PlayerId owner, BuildingId building, float x, float z)
@@ -335,9 +387,155 @@ public sealed class VectorFrontGame : Game
             color));
     }
 
-    private void UpdateCamera(KeyboardState keyboard, double elapsedSeconds)
-    {        var delta = (float)elapsedSeconds;
-        var mouse = Mouse.GetState();
+    private void HandleSelectionInput(KeyboardState keyboard, MouseState mouse)
+    {
+        if (!IsActive)
+        {
+            _boxSelecting = false;
+            return;
+        }
+
+        var viewport = GraphicsDevice.Viewport;
+        var inside =
+            viewport.Bounds.Contains(mouse.Position) &&
+            !_gameUi.IsPointerOverHud(mouse.Position);
+        var leftDown = mouse.LeftButton == ButtonState.Pressed;
+        var leftWasDown = _previousMouse.LeftButton == ButtonState.Pressed;
+        var additive = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift);
+
+        if (leftDown && !leftWasDown && inside)
+        {
+            _boxSelecting = true;
+            _boxStart = mouse.Position;
+            _boxEnd = mouse.Position;
+        }
+        else if (leftDown && _boxSelecting)
+        {
+            _boxEnd = mouse.Position;
+        }
+        else if (!leftDown && leftWasDown && _boxSelecting)
+        {
+            _boxSelecting = false;
+            var rectangle = NormalizeRectangle(_boxStart, _boxEnd);
+
+            if (rectangle.Width < 5 && rectangle.Height < 5)
+            {
+                _selection.Select(
+                    Picking.PickEntity(
+                        _world,
+                        _camera,
+                        mouse.Position,
+                        viewport.Width,
+                        viewport.Height),
+                    additive);
+            }
+            else
+            {
+                _selection.SelectRectangle(
+                    _world,
+                    _camera,
+                    rectangle,
+                    viewport.Width,
+                    viewport.Height,
+                    additive);
+            }
+        }
+
+        if (WasPressed(keyboard, Keys.Back))
+        {
+            FocusNexus();
+        }
+
+        if (WasPressed(keyboard, Keys.Space))
+        {
+            FocusSelection();
+        }
+
+        var control = keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl);
+        for (var group = 1; group <= 9; group++)
+        {
+            var key = (Keys)((int)Keys.D1 + group - 1);
+            if (!WasPressed(keyboard, key))
+            {
+                continue;
+            }
+
+            if (control)
+            {
+                _selection.AssignGroup(group);
+            }
+            else
+            {
+                _selection.RecallGroup(group, _world);
+            }
+        }
+    }
+
+    private void FocusNexus()
+    {
+        foreach (var entity in _world.Entities)
+        {
+            if (entity.Owner == PlayerId.Player &&
+                entity.Kind == EntityKind.Building &&
+                entity.BuildingDef?.Id == BuildingId.Nexus &&
+                entity.IsAlive)
+            {
+                _rtsCamera.FocusOn(entity.Position);
+                return;
+            }
+        }
+    }
+
+    private void FocusSelection()
+    {
+        var primary = _selection.Primary(_world);
+        if (primary is not null)
+        {
+            _rtsCamera.FocusOn(primary.Position);
+        }
+    }
+
+    private void DrawSelectionBox()
+    {
+        if (!_boxSelecting)
+        {
+            return;
+        }
+
+        var rectangle = NormalizeRectangle(_boxStart, _boxEnd);
+        if (rectangle.Width < 2 || rectangle.Height < 2)
+        {
+            return;
+        }
+
+        var border = new Color(95, 227, 255, 200);
+        _overlayBatch.Begin(
+            SpriteSortMode.Deferred,
+            BlendState.AlphaBlend,
+            SamplerState.PointClamp,
+            DepthStencilState.None,
+            RasterizerState.CullNone);
+
+        _overlayBatch.Draw(_overlayPixel, rectangle, new Color(95, 227, 255, 25));
+        _overlayBatch.Draw(_overlayPixel, new Rectangle(rectangle.Left, rectangle.Top, rectangle.Width, 1), border);
+        _overlayBatch.Draw(_overlayPixel, new Rectangle(rectangle.Left, rectangle.Bottom - 1, rectangle.Width, 1), border);
+        _overlayBatch.Draw(_overlayPixel, new Rectangle(rectangle.Left, rectangle.Top, 1, rectangle.Height), border);
+        _overlayBatch.Draw(_overlayPixel, new Rectangle(rectangle.Right - 1, rectangle.Top, 1, rectangle.Height), border);
+        _overlayBatch.End();
+    }
+
+    private bool WasPressed(KeyboardState keyboard, Keys key) =>
+        keyboard.IsKeyDown(key) && _previousKeyboard.IsKeyUp(key);
+
+    private static Rectangle NormalizeRectangle(Point a, Point b) => new(
+        Math.Min(a.X, b.X),
+        Math.Min(a.Y, b.Y),
+        Math.Abs(a.X - b.X),
+        Math.Abs(a.Y - b.Y));
+
+    private void UpdateCamera(KeyboardState keyboard, double elapsedSeconds, MouseState mouse)
+    {
+        var delta = (float)elapsedSeconds;
         var viewport = GraphicsDevice.Viewport;
 
         if (IsActive)
@@ -400,7 +598,7 @@ public sealed class VectorFrontGame : Game
         _rtsCamera.Update(delta);
     }
 
-    private void UpdateHover()
+    private void UpdateHover(MouseState mouse)
     {
         if (!IsActive)
         {
@@ -408,7 +606,6 @@ public sealed class VectorFrontGame : Game
             return;
         }
 
-        var mouse = Mouse.GetState();
         var viewport = GraphicsDevice.Viewport;
 
         if (!viewport.Bounds.Contains(mouse.Position) || _gameUi.IsPointerOverHud(mouse.Position))

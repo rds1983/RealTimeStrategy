@@ -112,6 +112,83 @@ public sealed class PickingTests
     }
 
     [Fact]
+    public void Rts_camera_picks_a_projected_unit_at_max_zoom()
+    {
+        var world = CreateWorld();
+        var unit = world.SpawnUnit(PlayerId.Player, UnitId.Striker, Vector3.Zero);
+        var camera = new CameraView(MathHelper.PiOver4, 0.5f, 500f);
+        camera.SetViewport(1600, 900);
+        var rtsCamera = new RtsCamera(
+            camera,
+            new Vector2(-60f, -60f),
+            new Vector2(60f, 60f));
+        rtsCamera.Zoom(-6f);
+        rtsCamera.Update(10f);
+
+        Assert.True(Picking.TryProjectToScreen(
+            camera,
+            unit.Position + new Vector3(0f, 1f, 0f),
+            1600,
+            900,
+            out var screen));
+
+        var picked = Picking.PickEntity(
+            world,
+            camera,
+            new Point((int)screen.X, (int)screen.Y),
+            1600,
+            900);
+
+        Assert.Same(unit, picked);
+    }
+
+    [Fact]
+    public void Off_center_ground_point_round_trips_through_projection()
+    {
+        var camera = CreateCamera(new Vector3(0f, 20f, 20f), Vector3.Zero);
+        var worldPoint = new Vector3(10f, 0f, -5f);
+
+        Assert.True(Picking.TryProjectToScreen(
+            camera,
+            worldPoint,
+            Width,
+            Height,
+            out var screen));
+        Assert.True(Picking.TryGetGroundPoint(
+            camera,
+            new Point((int)MathF.Round(screen.X), (int)MathF.Round(screen.Y)),
+            Width,
+            Height,
+            out var ground));
+
+        Assert.True(Vector3.Distance(ground, worldPoint) < 0.1f);
+    }
+
+    [Fact]
+    public void Off_center_entity_is_pickable_at_its_projected_position()
+    {
+        var world = CreateWorld();
+        var unit = world.SpawnUnit(PlayerId.Player, UnitId.Striker, new Vector3(-8f, 0f, -4f));
+        var camera = CreateCamera(new Vector3(0f, 20f, 20f), Vector3.Zero);
+
+        Assert.True(Picking.TryProjectToScreen(
+            camera,
+            unit.Position + new Vector3(0f, unit.Radius, 0f),
+            Width,
+            Height,
+            out var screen));
+
+        var picked = Picking.PickEntity(
+            world,
+            camera,
+            new Point((int)MathF.Round(screen.X), (int)MathF.Round(screen.Y)),
+            Width,
+            Height);
+
+        Assert.Same(unit, picked);
+    }
+
+    [Fact]
     public void Empty_world_returns_null()
     {
         var world = CreateWorld();

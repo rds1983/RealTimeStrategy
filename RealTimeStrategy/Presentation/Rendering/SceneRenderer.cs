@@ -14,6 +14,7 @@ public sealed class SceneRenderer : IDisposable
     private readonly GraphicsDevice _device;
     private readonly BasicEffect _effect;
     private readonly RasterizerState _rasterizerState;
+    private readonly RasterizerState _transparentRasterizerState;
     private readonly List<MeshDrawCommand> _commands = new(256);
     private readonly Dictionary<DrModel, Matrix[]> _boneTransforms = new();
 
@@ -44,6 +45,12 @@ public sealed class SceneRenderer : IDisposable
         _rasterizerState = new RasterizerState
         {
             CullMode = CullMode.CullCounterClockwiseFace,
+            FillMode = FillMode.Solid,
+        };
+
+        _transparentRasterizerState = new RasterizerState
+        {
+            CullMode = CullMode.None,
             FillMode = FillMode.Solid,
         };
     }
@@ -155,6 +162,7 @@ public sealed class SceneRenderer : IDisposable
         }
 
         _device.RasterizerState = _rasterizerState;
+        _device.RasterizerState = _rasterizerState;
         _device.SamplerStates[0] = SamplerState.LinearWrap;
 
         _effect.View = _camera.View;
@@ -168,6 +176,8 @@ public sealed class SceneRenderer : IDisposable
     {
         _device.BlendState = transparent ? BlendState.AlphaBlend : BlendState.Opaque;
         _device.DepthStencilState = transparent ? DepthStencilState.DepthRead : DepthStencilState.Default;
+        _device.RasterizerState = transparent ? _transparentRasterizerState : _rasterizerState;
+        _effect.LightingEnabled = !transparent;
 
         foreach (var command in _commands)
         {
@@ -235,6 +245,7 @@ public sealed class SceneRenderer : IDisposable
     {
         _effect.Dispose();
         _rasterizerState.Dispose();
+        _transparentRasterizerState.Dispose();
         _boneTransforms.Clear();
     }
 
