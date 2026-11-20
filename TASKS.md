@@ -60,9 +60,9 @@ Goal: a window with a lit 3D scene, a working camera and a testable build.
   - Add camera focus coordinates to the debug overlay panel (T-002).
   - Acceptance: camera math unit tests (clamping, yaw wrap, pan scaling); no gimbal flip; smooth zoom.
 
-- [ ] **T-007 — Ground, build grid and blob shadows**
-  - Generated grid texture, map border, build-grid overlay toggle, fake shadows under entities; replace the plain reference plane from T-003.
-  - Acceptance: grid aligns exactly with the 2 × 2 unit grid used by placement; shadows follow interpolated positions; F1 shows grid coordinates.
+- [x] **T-007 — Ground, build grid and blob shadows**
+  - Generated grid texture, map border, build-grid overlay toggle, fake shadows under entities; replaced the plain reference plane from T-003.
+  - Acceptance: grid aligns exactly with the 2 × 2 unit grid used by placement; shadows sit under every gallery model and will follow interpolated transforms once entities exist (T-009); F1 shows the camera's grid cell.
 
 ---
 
@@ -76,7 +76,7 @@ Goal: deterministic headless world with movement and orders.
   - Acceptance: all MVP units/buildings defined; invalid definitions fail fast with clear messages.
 
 - [ ] **T-009 — World, entities and players**
-  - `World` with seeded RNG, `PlayerState` (alloy, energy, supply, ids), `Entity` list + lookup, spawn/despawn, deferred removal, `Step(dt)`.
+  - `World` with seeded RNG, `PlayerState` (alloy, energy, supply, ids), `Entity` list + lookup, spawn/despawn, deferred removal, `Step(dt)`; use `MapGrid.MapSize`/`MapGrid.CellSize` for bounds.
   - Commands queue applied at tick start; world snapshot/checksum helper for tests.
   - Entity rendering: each entity holds its cached `DrModel` and palette; the renderer submits `DrModel` at the interpolated entity transform.
   - Add the entity count to the debug overlay panel (T-002).
@@ -150,7 +150,7 @@ Goal: harvesting loop that the player can see and interrupt.
 Goal: place structures, build an army, expand production.
 
 - [ ] **T-022 — Placement mode and ghost preview**
-  - Footprint snapping to the 2 × 2 unit grid, build-radius check, overlap/blocker check, ghost tint, rotation-free placement, cancel; temporary debug hotkey enters placement mode.
+  - Footprint snapping to the `MapGrid` 2-unit cells, build-radius check, overlap/blocker check, ghost tint, rotation-free placement, cancel; temporary debug hotkey enters placement mode.
   - Acceptance: validity matches the nav grid exactly; test matrix for overlap, radius, nodes, map edge; ghost never blocks input after cancel.
 
 - [ ] **T-023 — Construction progress, cancel and refund**
@@ -227,7 +227,7 @@ Goal: a complete, understandable interface.
   - Acceptance: every action reachable with mouse and hotkey; disabled reasons match T-026 rules; replaces T-025 bridge.
 
 - [ ] **T-038 — Minimap**
-  - Terrain, structures, units, camera viewport rectangle; left-click jump, right-click move order; click-drag pan.
+  - Terrain, structures, units, camera viewport rectangle using `MapGrid`; left-click jump, right-click move order; click-drag pan.
   - Acceptance: minimap coordinates match world picking; updates at 60 FPS without allocation spikes; respects map bounds.
 
 - [ ] **T-039 — Notifications and tooltips**
@@ -308,3 +308,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-004 | Procedural mesh library | 2026-11-20 | c6a4323 |
 | T-005 | Model factory and palette | 2026-11-20 | 5dd25b3 |
 | T-006 | RTS camera, smooth rotation and controls HUD | 2026-11-20 | 5e75f29 |
+| T-007 | Ground, build grid and blob shadows | 2026-11-20 | _pending_ |

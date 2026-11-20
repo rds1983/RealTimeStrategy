@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.Xna.Framework;
 using RealTimeStrategy.Core;
 using RealTimeStrategy.Core.Simulation;
+using RealTimeStrategy.Core.World;
 
 namespace RealTimeStrategy.Presentation.Ui;
 
@@ -106,6 +107,6 @@ public partial class DebugOverlayPanel
 
         _cameraLabel.Text = string.Create(
             CultureInfo.InvariantCulture,
-            $"Focus {_cameraFocus.X:0.0}, {_cameraFocus.Z:0.0}  |  dist {_cameraDistance:0}");
+            $"Focus {_cameraFocus.X:0.0}, {_cameraFocus.Z:0.0}  |  cell {MapGrid.WorldToCell(_cameraFocus).X},{MapGrid.WorldToCell(_cameraFocus).Y}  |  dist {_cameraDistance:0}");
     }
 }

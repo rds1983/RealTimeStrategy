@@ -70,9 +70,38 @@ public sealed class SceneRenderer : IDisposable
 
     public void Submit(DrMesh mesh, Matrix world, Color diffuseColor, Color emissiveColor)
     {
+        Submit(mesh, world, diffuseColor, emissiveColor, null);
+    }
+
+    public void Submit(DrMesh mesh, Matrix world, Color diffuseColor, Texture2D texture)
+    {
+        Submit(mesh, world, diffuseColor, Color.Black, texture);
+    }
+
+    public void Submit(
+        DrMesh mesh,
+        Matrix world,
+        Color diffuseColor,
+        Color emissiveColor,
+        Texture2D? texture)
+    {
         foreach (var part in mesh.MeshParts)
         {
-            Submit(part, world, diffuseColor, emissiveColor);
+            AddCommand(part, world, diffuseColor, emissiveColor, texture, 1f, transparent: false);
+        }
+    }
+
+    /// <summary>Submits a translucent mesh; drawn after all opaque geometry without depth writes.</summary>
+    public void SubmitTransparent(
+        DrMesh mesh,
+        Matrix world,
+        Color diffuseColor,
+        Texture2D? texture = null,
+        float alpha = 0.4f)
+    {
+        foreach (var part in mesh.MeshParts)
+        {
+            AddCommand(part, world, diffuseColor, Color.Black, texture, alpha, transparent: true);
         }
     }
 
@@ -89,8 +118,7 @@ public sealed class SceneRenderer : IDisposable
 
     public void Submit(DrMeshPart part, Matrix world, Color diffuseColor, Color emissiveColor)
     {
-        _commands.Add(new MeshDrawCommand(part, world, diffuseColor, emissiveColor));
-        SubmittedCount++;
+        AddCommand(part, world, diffuseColor, emissiveColor, null, 1f, transparent: false);
     }
 
     /// <summary>
@@ -126,17 +154,30 @@ public sealed class SceneRenderer : IDisposable
             throw new InvalidOperationException("BeginFrame must be called before Render.");
         }
 
-        _device.BlendState = BlendState.Opaque;
-        _device.DepthStencilState = DepthStencilState.Default;
         _device.RasterizerState = _rasterizerState;
+        _device.SamplerStates[0] = SamplerState.LinearWrap;
 
         _effect.View = _camera.View;
         _effect.Projection = _camera.Projection;
 
+        RenderPass(transparent: false);
+        RenderPass(transparent: true);
+    }
+
+    private void RenderPass(bool transparent)
+    {
+        _device.BlendState = transparent ? BlendState.AlphaBlend : BlendState.Opaque;
+        _device.DepthStencilState = transparent ? DepthStencilState.DepthRead : DepthStencilState.Default;
+
         foreach (var command in _commands)
         {
+            if (command.Transparent != transparent)
+            {
+                continue;
+            }
+
             var part = command.Part;
-            if (!_camera.IsVisible(part.BoundingBox, command.World))
+            if (!_camera!.IsVisible(part.BoundingBox, command.World))
             {
                 CulledCount++;
                 continue;
@@ -145,6 +186,9 @@ public sealed class SceneRenderer : IDisposable
             _effect.World = command.World;
             _effect.DiffuseColor = command.DiffuseColor.ToVector3();
             _effect.EmissiveColor = command.EmissiveColor.ToVector3();
+            _effect.TextureEnabled = command.Texture is not null;
+            _effect.Texture = command.Texture;
+            _effect.Alpha = command.Alpha;
             _effect.CurrentTechnique.Passes[0].Apply();
 
             _device.SetVertexBuffer(part.VertexBuffer);
@@ -167,6 +211,26 @@ public sealed class SceneRenderer : IDisposable
         }
     }
 
+    private void AddCommand(
+        DrMeshPart part,
+        Matrix world,
+        Color diffuseColor,
+        Color emissiveColor,
+        Texture2D? texture,
+        float alpha,
+        bool transparent)
+    {
+        _commands.Add(new MeshDrawCommand(
+            part,
+            world,
+            diffuseColor,
+            emissiveColor,
+            texture,
+            alpha,
+            transparent));
+        SubmittedCount++;
+    }
+
     public void Dispose()
     {
         _effect.Dispose();
@@ -178,5 +242,8 @@ public sealed class SceneRenderer : IDisposable
         DrMeshPart Part,
         Matrix World,
         Color DiffuseColor,
-        Color EmissiveColor);
+        Color EmissiveColor,
+        Texture2D? Texture,
+        float Alpha,
+        bool Transparent);
 }

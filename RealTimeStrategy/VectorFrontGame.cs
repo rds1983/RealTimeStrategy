@@ -7,6 +7,7 @@ using Microsoft.Xna.Framework.Input;
 using Myra;
 using RealTimeStrategy.Core;
 using RealTimeStrategy.Core.Simulation;
+using RealTimeStrategy.Core.World;
 using RealTimeStrategy.Presentation.Camera;
 using RealTimeStrategy.Presentation.Content;
 using RealTimeStrategy.Presentation.Rendering;
@@ -34,11 +35,15 @@ public sealed class VectorFrontGame : Game
     private MeshLibrary _meshLibrary = null!;
     private ModelFactory _modelFactory = null!;
     private DrMesh _groundMesh = null!;
+    private DrMesh _shadowMesh = null!;
+    private Texture2D _groundTexture = null!;
+    private Texture2D _buildGridTexture = null!;
     private readonly List<SceneObject> _sceneObjects = new();
     private readonly List<GalleryItem> _gallery = new();
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
     private int _previousScrollValue;
+    private bool _showBuildGrid;
     private int _drawnFrames;
 
     public VectorFrontGame(string[]? args = null)
@@ -59,6 +64,7 @@ public sealed class VectorFrontGame : Game
 
         _smokeTestFrameLimit = ParseSmokeTestFrameLimit(args);
         _startWithOverlay = args?.Contains("--overlay") == true;
+        _showBuildGrid = args?.Contains("--build-grid") == true;
         _screenshotPath = ParseOptionValue(args, "--screenshot");
         _wallClock.Start();
     }
@@ -83,6 +89,8 @@ public sealed class VectorFrontGame : Game
         _gameUi.Dispose();
         _sceneRenderer.Dispose();
         _meshLibrary.Dispose();
+        _groundTexture.Dispose();
+        _buildGridTexture.Dispose();
 
         base.UnloadContent();
     }
@@ -94,6 +102,11 @@ public sealed class VectorFrontGame : Game
         if (keyboard.IsKeyDown(Keys.F1) && _previousKeyboard.IsKeyUp(Keys.F1))
         {
             _gameUi.ToggleDebugOverlay();
+        }
+
+        if (keyboard.IsKeyDown(Keys.G) && _previousKeyboard.IsKeyUp(Keys.G))
+        {
+            _showBuildGrid = !_showBuildGrid;
         }
 
         if (keyboard.IsKeyDown(Keys.Escape))
@@ -137,6 +150,9 @@ public sealed class VectorFrontGame : Game
         base.Draw(gameTime);
 
         _sceneRenderer.BeginFrame(_camera);
+
+        _sceneRenderer.Submit(_groundMesh, Matrix.Identity, Color.White, _groundTexture);
+
         foreach (var sceneObject in _sceneObjects)
         {
             _sceneRenderer.Submit(sceneObject.Mesh, sceneObject.World, sceneObject.Color);
@@ -145,6 +161,27 @@ public sealed class VectorFrontGame : Game
         foreach (var galleryItem in _gallery)
         {
             _sceneRenderer.Submit(galleryItem.Model, galleryItem.World);
+        }
+
+        foreach (var galleryItem in _gallery)
+        {
+            var position = galleryItem.World.Translation;
+            var radius = ModelShadow.GetRadius(galleryItem.Id);
+            var shadowWorld =
+                Matrix.CreateScale(radius * 2f, 1f, radius * 2f) *
+                Matrix.CreateTranslation(position.X, 0.015f, position.Z);
+
+            _sceneRenderer.SubmitTransparent(_shadowMesh, shadowWorld, Color.Black, alpha: 0.4f);
+        }
+
+        if (_showBuildGrid)
+        {
+            _sceneRenderer.SubmitTransparent(
+                _groundMesh,
+                Matrix.CreateTranslation(0f, 0.03f, 0f),
+                Color.White,
+                _buildGridTexture,
+                alpha: 1f);
         }
 
         _sceneRenderer.Render();
@@ -188,16 +225,24 @@ public sealed class VectorFrontGame : Game
             GraphicsDevice.PresentationParameters.BackBufferHeight);
         _rtsCamera = new RtsCamera(
             _camera,
-            new Vector2(-60f, -60f),
-            new Vector2(60f, 60f));
+            new Vector2(-MapGrid.HalfSize, -MapGrid.HalfSize),
+            new Vector2(MapGrid.HalfSize, MapGrid.HalfSize));
         _rtsCamera.Zoom(-4f);
         _rtsCamera.Update(10f);
 
         _previousMouse = Mouse.GetState();
         _previousScrollValue = _previousMouse.ScrollWheelValue;
 
-        _groundMesh = _meshLibrary.GetPlane(new Vector2(120f, 120f));
-        _sceneObjects.Add(new SceneObject(_groundMesh, Matrix.Identity, new Color(28, 34, 48)));
+        _groundTexture = GridTextureFactory.CreateGroundGrid(GraphicsDevice);
+        _buildGridTexture = GridTextureFactory.CreateBuildGrid(GraphicsDevice);
+
+        _groundMesh = _meshLibrary.GetPlane(
+            new Vector2(MapGrid.MapSize, MapGrid.MapSize),
+            uScale: MapGrid.CellCount,
+            vScale: MapGrid.CellCount);
+        _shadowMesh = _meshLibrary.GetDisc(0.5f, 24);
+
+        AddMapBorder();
 
         var concord = FactionPaletteId.Concord;
         var nullFaction = FactionPaletteId.Null;
@@ -226,9 +271,34 @@ public sealed class VectorFrontGame : Game
         AddGalleryModel(ModelId.Debris, nullFaction, 25f, 4f);
     }
 
+    private void AddMapBorder()
+    {
+        var color = new Color(70, 150, 180);
+        var horizontal = _meshLibrary.GetBox(new Vector3(MapGrid.MapSize + 0.8f, 0.3f, 0.5f));
+        var vertical = _meshLibrary.GetBox(new Vector3(0.5f, 0.3f, MapGrid.MapSize + 0.8f));
+
+        _sceneObjects.Add(new SceneObject(
+            horizontal,
+            Matrix.CreateTranslation(0f, 0.15f, -MapGrid.HalfSize - 0.1f),
+            color));
+        _sceneObjects.Add(new SceneObject(
+            horizontal,
+            Matrix.CreateTranslation(0f, 0.15f, MapGrid.HalfSize + 0.1f),
+            color));
+        _sceneObjects.Add(new SceneObject(
+            vertical,
+            Matrix.CreateTranslation(-MapGrid.HalfSize - 0.1f, 0.15f, 0f),
+            color));
+        _sceneObjects.Add(new SceneObject(
+            vertical,
+            Matrix.CreateTranslation(MapGrid.HalfSize + 0.1f, 0.15f, 0f),
+            color));
+    }
+
     private void AddGalleryModel(ModelId id, FactionPaletteId palette, float x, float z, float y = 0f)
     {
         _gallery.Add(new GalleryItem(
+            id,
             _modelFactory.Get(id, palette),
             Matrix.CreateTranslation(x, y, z)));
     }
@@ -376,5 +446,5 @@ public sealed class VectorFrontGame : Game
 
     private readonly record struct SceneObject(DrMesh Mesh, Matrix World, Color Color);
 
-    private readonly record struct GalleryItem(DrModel Model, Matrix World);
+    private readonly record struct GalleryItem(ModelId Id, DrModel Model, Matrix World);
 }

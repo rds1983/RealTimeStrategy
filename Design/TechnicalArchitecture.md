@@ -29,6 +29,7 @@ RealTimeStrategy/
   Core/                          pure simulation — no MonoGame types except Vector2/3 math
     GameInfo.cs                  title/version metadata, safe for headless tests
     Simulation/                  SimulationClock (fixed-step accumulator)
+    World/MapGrid.cs             map size, 2-unit cell conversion (unit tested)
     Definitions/                 UnitDef, BuildingDef, WeaponDef, DefinitionRegistry
     World/                       World, Entity, PlayerState, EntityId, spawn/despawn
     Orders/                      Order types, OrderQueue, order execution
@@ -49,6 +50,8 @@ RealTimeStrategy/
       ModelFactory.cs            builds cached DrModel hierarchies per (id, palette)
       ModelId.cs                 unit/structure/prop identifiers
       FactionPalettes.cs         Concord / Null / Neutral colors
+      GridTextureFactory.cs      generated ground + build-grid textures
+      ModelShadow.cs             per-model shadow footprint
       GameUi.cs                  one Desktop, HUD + debug panels, pointer-over-HUD
     Ui/                          Myra markup, generated panels, HUD binding, screens
       GameHud.xmmp               controls legend markup
@@ -154,8 +157,11 @@ Later passes add the textured/grid ground (T-007), blob shadows, units/structure
 - **Coordinates:** right-handed (`Matrix.CreateLookAt` + `CreatePerspectiveFieldOfView`), default `toLeftHanded: false` DigitalRiseModel primitives, `CullMode.CullCounterClockwiseFace`.
 - **Lens:** 45° vertical FOV, near 0.5, far 500. `RtsCamera` drives the `CameraView`; the gallery starts at focus `(0, 0)` and distance 69 so every model fits.
 - **Lighting:** `BasicEffect` with per-pixel lighting, ambient `0.42`, one directional light (`0.78`, direction `(-0.45, -1, -0.35)`), specular `0.08` / power 24. No textures yet.
-- **Draw list:** `SceneRenderer` keeps a preallocated `List<MeshDrawCommand>` of `(DrMeshPart, world matrix, diffuse, emissive)`; no per-frame allocation once the list capacity is reached. `SubmittedCount` / `CulledCount` / `DrawnCount` are exposed for debugging.
-- **Model gallery:** `VectorFrontGame.CreateModelGallery` lays out every MVP model: five Concord structures, four units in each faction palette, an alloy node, a projectile and debris, on the 120 × 120 ground plane. It exists only to validate silhouettes/palettes and is replaced once the world supplies entities. The gallery currently uses 90 cached meshes for 16 `DrModel` instances and ~90 draw calls.
+- **Draw list:** `SceneRenderer` keeps a preallocated `List<MeshDrawCommand>` of `(DrMeshPart, world, diffuse, emissive, texture, alpha, transparent)`; no per-frame allocation once the list capacity is reached. `SubmittedCount` / `CulledCount` / `DrawnCount` are exposed for debugging.
+- **Model gallery:** `VectorFrontGame.CreateModelGallery` lays out every MVP model: five Concord structures, four units in each faction palette, an alloy node, a projectile and debris, on the 120 × 120 textured ground. It exists only to validate silhouettes/palettes and is replaced once the world supplies entities. The gallery currently uses 93 cached meshes for 16 `DrModel` instances and ~110 draw calls (models, border, shadows, optional grid).
+- **Ground and shadows:** the ground is a 120 × 120 plane with UV scale 60, textured by a generated 128 px tile whose edge lines map to 2-unit `MapGrid` cells. Four thin boxes mark the map border. Each gallery model submits a scaled disc at ground level (alpha 0.4, transparent pass); `ModelShadow` provides the per-`ModelId` radius. Shadows will use interpolated entity positions once T-009 exists.
+- **Build-grid overlay:** a second copy of the ground mesh at y = 0.03 uses a transparent cyan tile texture (alpha 120). Toggle with `G`; it defaults off and the `--build-grid` smoke flag enables it for deterministic screenshots.
+- **Transparent pass:** `SceneRenderer` collects textured/alpha commands (`SubmitTransparent`) and draws them after opaque geometry with `AlphaBlend` + `DepthRead` (no depth writes). Opaque commands use `Opaque` + `Default`.
 - **Materials:** `ModelFactory` creates three `DrMaterial`s per model (chassis, panel, accent). The accent uses a dark diffuse base (35 % of the accent) plus the full accent as emissive, so energy details stay colored instead of clipping to white.
 
 ### Mesh and model pipeline
@@ -245,9 +251,10 @@ Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count 
 - **Rendering math:** `CameraView` tests cover frustum visibility (origin, behind camera, outside FOV, beyond far plane, near-plane intersection), world-matrix bounds culling, `LookAt` changes, aspect/projection and invalid input.
 - **RTS camera:** 15 tests cover defaults, distance/pitch, camera-relative panning, distance-scaled pan speed, map clamping, focus flattening, 45° yaw requests with smooth easing/wrapping, zoom clamping/smoothing, world-units-per-pixel, invalid bounds and viewport.
 - **Mesh cache:** equal keys reuse one mesh, different keys create separate meshes, disposal releases every cached mesh exactly once, access after dispose throws, and the key includes every shape parameter with neutral defaults.
+- **Map grid:** `MapGrid` tests cover map/cell constants, corner/center/edge conversion, cell-center round-trips and inside-map checks; the ground UV scale uses the same 2-unit cell constant, so the texture grid and build placement cannot drift.
 - **Model gallery (manual):** every `ModelId` appears with a distinct silhouette and correct palette; accents stay colored (not white); smoke output reports mesh/model counts (`90` meshes / `16` models at the time of writing).
 - **Manual smoke checklist** for rendering/UI tasks: window opens, camera pans/zooms, models visible with correct colors, no exceptions in log, 60 FPS.
-- **Smoke test:** `dotnet run --project RealTimeStrategy -- --smoke-test 30` creates the window/graphics device, renders 30 frames and exits with code 0. Add `--overlay` to force the debug overlay visible and exercise the Myra/font path. Add `--screenshot <path.png>` to save the backbuffer of the final frame — use this for visual checks instead of OS window capture.
+- **Smoke test:** `dotnet run --project RealTimeStrategy -- --smoke-test 30` creates the window/graphics device, renders 30 frames and exits with code 0. Add `--overlay` to force the debug overlay visible, `--build-grid` to show the build grid, and `--screenshot <path.png>` to save the backbuffer of the final frame — use this for visual checks instead of OS window capture.
 - Tests must be fast (< 10 s total) and must not require a display.
 
 ---

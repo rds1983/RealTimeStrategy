@@ -196,7 +196,8 @@ Camera: perspective, 45° field of view, pitch 55°, default yaw 45°, distance 
 | `↑ ↓ ← →` / edge scroll | Pan |
 | Middle mouse drag | Pan |
 | Mouse wheel | Zoom |
-| `Q` / `E` | Rotate camera 45° |
+| `Q` / `E` | Rotate camera 45° (smooth) |
+| `G` | Toggle build-grid overlay |
 | Left click | Select entity / confirm placement |
 | Left drag | Box select |
 | `Shift` + click / drag | Add to selection |
@@ -243,7 +244,7 @@ Selection rules:
 - **Notifications** — "Not enough alloy", "Supply blocked", "Construction complete", "Under attack", "Nexus lost".
 - **End screen** — VICTORY / DEFEAT with match time, units built/lost summary and Restart.
 
-**Current prototype:** the HUD shows an always-visible controls legend in the top-right corner (pan/zoom/rotate/debug/quit) plus the optional `F1` debug panel. Resource bar, minimap, selection panel and command card are added with the systems they represent; they must not be faked earlier.
+**Current prototype:** the HUD shows an always-visible controls legend in the top-right corner (pan/zoom/rotate/grid/debug/quit) plus the optional `F1` debug panel. The ground uses a subtle grid aligned to the 2 × 2 unit build cells; `G` overlays the brighter build grid. Resource bar, minimap, selection panel and command card are added with the systems they represent; they must not be faked earlier.
 
 ---
 
