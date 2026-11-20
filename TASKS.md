@@ -317,4 +317,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-013 | Orders and command queue | 2026-11-20 | 1d3f056 |
 | T-014 | Picking and hover | 2026-11-20 | 21b9a9d |
 | T-015 | Selection and control groups | 2026-11-20 | 5e3c909 |
-| T-016 | Order issuing | 2026-11-20 | _pending_ |
+| T-016 | Order issuing | 2026-11-20 | cdf5122 |
