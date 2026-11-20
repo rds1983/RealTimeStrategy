@@ -314,4 +314,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-010 | Spatial grid and queries | 2026-11-20 | 0ce671d |
 | T-011 | Navigation grid and A* | 2026-11-20 | f07ee62 |
 | T-012 | Movement and steering | 2026-11-20 | 0541a35 |
-| T-013 | Orders and command queue | 2026-11-20 | _pending_ |
+| T-013 | Orders and command queue | 2026-11-20 | 1d3f056 |
