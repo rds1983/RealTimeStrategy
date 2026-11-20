@@ -42,6 +42,17 @@ public sealed class Entity
                 * MapGrid.CellSize * 0.5f;
             Speed = 0f;
         }
+        else if (kind == EntityKind.ResourceNode)
+        {
+            // Nodes are depleted by harvesting, not by damage; keep a nominal health pool so the
+            // generic alive/removal path works unchanged.
+            DefinitionId = 0;
+            MaxHealth = 1f;
+            Armor = 0f;
+            Radius = EconomyDef.NodeRadius;
+            Speed = 0f;
+            Reserve = EconomyDef.NodeReserve;
+        }
         else
         {
             throw new ArgumentException("Entity requires a unit or building definition.", nameof(unitDef));
@@ -54,6 +65,11 @@ public sealed class Entity
         if (kind == EntityKind.Unit)
         {
             Orders = new OrderQueue();
+
+            if (unitDef!.Id == UnitId.Harvester)
+            {
+                Harvester = new HarvesterState();
+            }
         }
     }
 
@@ -92,6 +108,14 @@ public sealed class Entity
     public bool HoldPosition { get; internal set; }
 
     public Vector3? RallyPoint { get; internal set; }
+
+    /// <summary>Remaining alloy in a resource node; zero for every other entity kind.</summary>
+    public int Reserve { get; internal set; }
+
+    /// <summary>Trip state for Harvester units, null otherwise.</summary>
+    public HarvesterState? Harvester { get; }
+
+    public bool IsResourceNode => Kind == EntityKind.ResourceNode;
 
     public bool PendingRemoval { get; internal set; }
 

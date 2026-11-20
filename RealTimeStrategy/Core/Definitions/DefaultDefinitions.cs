@@ -206,5 +206,11 @@ public static class DefaultDefinitions
             Name = "Null",
             Description = "Swarm machine intelligence; charcoal chassis with magenta accents.",
         },
+        new FactionDef
+        {
+            Id = FactionId.Neutral,
+            Name = "Neutral",
+            Description = "Unowned alloy deposits and environment props; no player affiliation.",
+        },
     };
 }

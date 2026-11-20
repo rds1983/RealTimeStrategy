@@ -10,6 +10,7 @@ public static class EntityModels
     {
         EntityKind.Unit => GetModel(entity.UnitDef!.Id),
         EntityKind.Building => GetModel(entity.BuildingDef!.Id),
+        EntityKind.ResourceNode => ModelId.AlloyNode,
         _ => throw new ArgumentOutOfRangeException(nameof(entity), entity.Kind, "Unknown entity kind."),
     };
 
@@ -36,6 +37,7 @@ public static class EntityModels
     {
         FactionId.Concord => FactionPaletteId.Concord,
         FactionId.Null => FactionPaletteId.Null,
+        FactionId.Neutral => FactionPaletteId.Neutral,
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, "Unknown faction."),
     };
 }

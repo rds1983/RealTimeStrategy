@@ -30,6 +30,11 @@ public sealed class SelectionModel
                 continue;
             }
 
+            if (entity.IsResourceNode)
+            {
+                continue;
+            }
+
             firstEntity ??= entity;
             if (entity.Kind == EntityKind.Unit)
             {
@@ -49,7 +54,8 @@ public sealed class SelectionModel
             _selected.Clear();
         }
 
-        if (entity is null || !entity.IsAlive)
+        // Nodes are context targets (right-click to harvest), never a selection.
+        if (entity is null || !entity.IsAlive || entity.IsResourceNode)
         {
             return;
         }

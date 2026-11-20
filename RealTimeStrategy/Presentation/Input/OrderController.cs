@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using RealTimeStrategy.Core.Definitions;
 using RealTimeStrategy.Core.Orders;
 using RealTimeStrategy.Core.World;
 using WorldState = RealTimeStrategy.Core.World.World;
@@ -34,6 +35,16 @@ public sealed class OrderController
         if (primary is null)
         {
             return 0;
+        }
+
+        if (target is { IsResourceNode: true })
+        {
+            return IssueHarvest(world, target.Id, replace: !queue);
+        }
+
+        if (target is not null && IsDropOff(target) && primary.UnitDef?.Id == UnitId.Harvester)
+        {
+            return IssueReturnCargo(world, replace: !queue);
         }
 
         if (primary.Kind == EntityKind.Building)
@@ -111,6 +122,55 @@ public sealed class OrderController
     public int IssueStop(WorldState world) => IssueSimple(world, Order.Stop());
 
     public int IssueHold(WorldState world) => IssueSimple(world, Order.Hold());
+
+    /// <summary>Sends every selected Harvester to the node; other unit types are ignored.</summary>
+    private int IssueHarvest(WorldState world, EntityId node, bool replace)
+    {
+        var ordered = 0;
+
+        foreach (var id in _selection.SelectedIds)
+        {
+            if (!world.TryGetEntity(id, out var unit) ||
+                unit.UnitDef?.Id != UnitId.Harvester ||
+                !unit.IsAlive)
+            {
+                continue;
+            }
+
+            if (world.TryIssueOrder(id, Order.Harvest(node), replace))
+            {
+                ordered++;
+            }
+        }
+
+        return ordered;
+    }
+
+    /// <summary>Sends loaded Harvesters to the nearest drop-off, keeping their node assignment.</summary>
+    private int IssueReturnCargo(WorldState world, bool replace)
+    {
+        var ordered = 0;
+
+        foreach (var id in _selection.SelectedIds)
+        {
+            if (!world.TryGetEntity(id, out var unit) ||
+                unit.UnitDef?.Id != UnitId.Harvester ||
+                !unit.IsAlive)
+            {
+                continue;
+            }
+
+            if (world.TryIssueOrder(id, Order.ReturnCargo(), replace))
+            {
+                ordered++;
+            }
+        }
+
+        return ordered;
+    }
+
+    private static bool IsDropOff(Entity entity) =>
+        entity.Kind == EntityKind.Building && entity.BuildingDef is { IsDropOff: true };
 
     private int IssueSimple(WorldState world, Order order)
     {

@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using RealTimeStrategy.Core.Definitions;
+using RealTimeStrategy.Core.Economy;
 using RealTimeStrategy.Core.Movement;
 using RealTimeStrategy.Core.Navigation;
 using RealTimeStrategy.Core.Orders;
@@ -18,10 +19,12 @@ public sealed class World
     private readonly DefinitionRegistry _definitions;
     private readonly MovementSystem _movement;
     private readonly OrderExecutor _orders = new();
+    private readonly HarvestingSystem _harvesting = new();
     private readonly List<Entity> _entities = new();
     private readonly Dictionary<EntityId, Entity> _byId = new();
     private readonly List<WorldCommand> _commands = new();
     private readonly Dictionary<PlayerId, PlayerState> _players = new();
+    private readonly Dictionary<Point, int> _nodeCells = new();
 
     private int _nextEntityId = 1;
 
@@ -34,6 +37,7 @@ public sealed class World
 
         _players[PlayerId.Player] = new PlayerState(PlayerId.Player, FactionId.Concord);
         _players[PlayerId.Enemy] = new PlayerState(PlayerId.Enemy, FactionId.Null);
+        _players[PlayerId.Neutral] = new PlayerState(PlayerId.Neutral, FactionId.Neutral);
     }
 
     public DefinitionRegistry Definitions => _definitions;
@@ -93,6 +97,56 @@ public sealed class World
         GetPlayer(owner).AddSupplyCap(def.SupplyProvided);
         SetBuildingFootprint(def, entity.Position, blocked: true);
         return entity;
+    }
+
+    /// <summary>Spawns an unowned alloy node and blocks the navigation cell it sits on.</summary>
+    public Entity SpawnResourceNode(Vector3 position, int reserve = EconomyDef.NodeReserve)
+    {
+        if (reserve < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(reserve), reserve, "Reserve must be non-negative.");
+        }
+
+        var entity = new Entity(
+            new EntityId(_nextEntityId++),
+            PlayerId.Neutral,
+            EntityKind.ResourceNode,
+            null,
+            null,
+            ClampToMap(position));
+
+        entity.Reserve = reserve;
+        AddEntity(entity);
+        SetNodeCell(entity.Position, blocked: true);
+        return entity;
+    }
+
+    /// <summary>Nearest living drop-off structure owned by the player, if any.</summary>
+    public bool TryFindNearestDropOff(PlayerId owner, Vector3 from, out Entity dropOff)
+    {
+        Entity? best = null;
+        var bestDistanceSquared = float.PositiveInfinity;
+
+        foreach (var entity in _entities)
+        {
+            if (entity.Owner != owner ||
+                !entity.IsAlive ||
+                entity.Kind != EntityKind.Building ||
+                entity.BuildingDef is not { IsDropOff: true })
+            {
+                continue;
+            }
+
+            var distanceSquared = Vector3.DistanceSquared(entity.Position, from);
+            if (distanceSquared < bestDistanceSquared)
+            {
+                bestDistanceSquared = distanceSquared;
+                best = entity;
+            }
+        }
+
+        dropOff = best!;
+        return best is not null;
     }
 
     public void Enqueue(WorldCommand command)
@@ -174,6 +228,7 @@ public sealed class World
         Spatial.Rebuild(_entities);
         _orders.BeginTick(this);
         _movement.Step(this, deltaSeconds);
+        _harvesting.Step(this, deltaSeconds);
         _orders.EndTick(this);
         RemoveDeadEntities();
         Spatial.Rebuild(_entities);
@@ -262,6 +317,17 @@ public sealed class World
                     hash = Mix(hash, (ulong)order.Unit);
                 }
             }
+
+            hash = Mix(hash, (ulong)entity.Reserve);
+
+            if (entity.Harvester is { } harvester)
+            {
+                hash = Mix(hash, (ulong)harvester.Phase);
+                hash = Mix(hash, (ulong)harvester.Node.Value);
+                hash = Mix(hash, (ulong)harvester.DropOff.Value);
+                hash = Mix(hash, (ulong)harvester.Cargo);
+                hash = Mix(hash, (ulong)BitConverter.SingleToUInt32Bits(harvester.Timer));
+            }
         }
 
         foreach (var playerId in new[] { PlayerId.Player, PlayerId.Enemy })
@@ -289,6 +355,9 @@ public sealed class World
                     break;
                 case SpawnBuildingCommand spawnBuilding:
                     SpawnBuilding(spawnBuilding.Owner, spawnBuilding.Building, spawnBuilding.Position);
+                    break;
+                case SpawnResourceNodeCommand spawnNode:
+                    SpawnResourceNode(spawnNode.Position, spawnNode.Reserve);
                     break;
                 case DamageCommand damage:
                     if (_byId.TryGetValue(damage.Target, out var target) && damage.Amount > 0)
@@ -335,15 +404,20 @@ public sealed class World
             _entities.RemoveAt(i);
             _byId.Remove(entity.Id);
 
-            var player = GetPlayer(entity.Owner);
-            if (entity.Kind == EntityKind.Unit)
+            switch (entity.Kind)
             {
-                player.AddSupplyUsed(-entity.UnitDef!.Supply);
-            }
-            else
-            {
-                player.AddSupplyCap(-entity.BuildingDef!.SupplyProvided);
-                SetBuildingFootprint(entity.BuildingDef, entity.Position, blocked: false);
+                case EntityKind.Unit:
+                    GetPlayer(entity.Owner).AddSupplyUsed(-entity.UnitDef!.Supply);
+                    break;
+
+                case EntityKind.Building:
+                    GetPlayer(entity.Owner).AddSupplyCap(-entity.BuildingDef!.SupplyProvided);
+                    SetBuildingFootprint(entity.BuildingDef, entity.Position, blocked: false);
+                    break;
+
+                case EntityKind.ResourceNode:
+                    SetNodeCell(entity.Position, blocked: false);
+                    break;
             }
         }
     }
@@ -357,8 +431,7 @@ public sealed class World
         player.SupplyCap);
 
     private void SetBuildingFootprint(BuildingDef def, Vector3 position, bool blocked)
-    {
-        var halfWidth = def.Footprint.Width * MapGrid.CellSize * 0.5f;
+    {        var halfWidth = def.Footprint.Width * MapGrid.CellSize * 0.5f;
         var halfHeight = def.Footprint.Height * MapGrid.CellSize * 0.5f;
         var minCell = MapGrid.WorldToCell(new Vector3(
             position.X - halfWidth,
@@ -366,6 +439,42 @@ public sealed class World
             position.Z - halfHeight));
 
         Navigation.SetFootprint(minCell, def.Footprint.Width, def.Footprint.Height, blocked);
+    }
+
+    /// <summary>
+    /// Nodes block the single 2 × 2 cell under their center. Reference-counted so two nodes in
+    /// the same cell do not unblock each other when one depletes.
+    /// </summary>
+    private void SetNodeCell(Vector3 position, bool blocked)
+    {
+        var cell = MapGrid.WorldToCell(position);
+
+        if (blocked)
+        {
+            _nodeCells.TryGetValue(cell, out var count);
+            _nodeCells[cell] = count + 1;
+            if (count == 0)
+            {
+                Navigation.SetBlocked(cell, true);
+            }
+
+            return;
+        }
+
+        if (!_nodeCells.TryGetValue(cell, out var remaining))
+        {
+            return;
+        }
+
+        if (remaining <= 1)
+        {
+            _nodeCells.Remove(cell);
+            Navigation.SetBlocked(cell, false);
+        }
+        else
+        {
+            _nodeCells[cell] = remaining - 1;
+        }
     }
 
     private static Vector3 ClampToMap(Vector3 position) => new(

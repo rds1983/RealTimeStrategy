@@ -9,6 +9,7 @@
     <Label Text="Add   Shift" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
     <Label Text="Groups   Ctrl+1..9 / 1..9" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
     <Label Text="Order   RMB   (Shift queues)" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
+    <Label Text="Harvest   RMB node / Nexus" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
     <Label Text="Attack-move   A + LMB" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
     <Label Text="Stop / Hold   S / H" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
     <Label Text="Focus   Backspace / Space" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />

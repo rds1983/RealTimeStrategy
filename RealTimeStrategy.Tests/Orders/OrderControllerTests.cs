@@ -182,6 +182,70 @@ public sealed class OrderControllerTests
         Assert.Equal(new Vector3(4f, 0f, 6f), building.RallyPoint);
     }
 
+    [Fact]
+    public void Context_on_a_node_sends_harvesters_but_not_other_units()
+    {
+        var world = CreateWorld();
+        var selection = new SelectionModel();
+        var controller = new OrderController(selection);
+        var node = world.SpawnResourceNode(new Vector3(10f, 0f, 0f));
+        var first = world.SpawnUnit(PlayerId.Player, UnitId.Harvester, new Vector3(-10f, 0f, 0f));
+        var second = world.SpawnUnit(PlayerId.Player, UnitId.Harvester, new Vector3(-10f, 0f, 4f));
+        var striker = world.SpawnUnit(PlayerId.Player, UnitId.Striker, new Vector3(-10f, 0f, -4f));
+        selection.Select(first, additive: false);
+        selection.Select(second, additive: true);
+        selection.Select(striker, additive: true);
+        world.Step(0.05f);
+
+        var ordered = controller.IssueContext(world, node, null, queue: false);
+        world.Step(0.05f);
+
+        Assert.Equal(2, ordered);
+        Assert.Equal(OrderType.Harvest, first.Orders!.Current.Type);
+        Assert.Equal(OrderType.Harvest, second.Orders!.Current.Type);
+        Assert.True(striker.Orders!.IsEmpty);
+    }
+
+    [Fact]
+    public void Non_harvesters_ignore_node_context_without_deselecting()
+    {
+        var world = CreateWorld();
+        var selection = new SelectionModel();
+        var controller = new OrderController(selection);
+        var node = world.SpawnResourceNode(new Vector3(10f, 0f, 0f));
+        var striker = world.SpawnUnit(PlayerId.Player, UnitId.Striker, new Vector3(-10f, 0f, 0f));
+        selection.Select(striker, additive: false);
+        world.Step(0.05f);
+
+        Assert.Equal(0, controller.IssueContext(world, node, null, queue: false));
+        Assert.Equal(1, selection.Count);
+        Assert.True(striker.Orders!.IsEmpty);
+    }
+
+    [Fact]
+    public void Context_on_a_drop_off_returns_loaded_harvesters()
+    {
+        var world = CreateWorld();
+        var selection = new SelectionModel();
+        var controller = new OrderController(selection);
+        var node = world.SpawnResourceNode(Vector3.Zero);
+        var nexus = world.SpawnBuilding(PlayerId.Player, BuildingId.Nexus, new Vector3(0f, 0f, 16f));
+        var harvester = world.SpawnUnit(PlayerId.Player, UnitId.Harvester, new Vector3(-8f, 0f, 0f));
+        selection.Select(harvester, additive: false);
+        world.Step(0.05f);
+        Assert.Equal(1, controller.IssueContext(world, node, null, queue: false));
+
+        for (var i = 0; i < 1000 && harvester.Harvester!.Phase != HarvestPhase.Harvesting; i++)
+        {
+            world.Step(0.05f);
+        }
+
+        Assert.Equal(1, controller.IssueContext(world, nexus, null, queue: false));
+        world.Step(0.05f);
+
+        Assert.Equal(HarvestPhase.ToDropOff, harvester.Harvester.Phase);
+    }
+
     private static Core.World.World CreateWorld()
     {
         return new Core.World.World(DefinitionRegistry.CreateDefault(), seed: 7);

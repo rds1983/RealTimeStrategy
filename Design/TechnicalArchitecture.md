@@ -121,23 +121,24 @@ The game project is an `Exe` (console attached) during development so logs and c
 ### Definitions
 
 - Balance data lives in `Core/Definitions` as immutable `record` types: `UnitDef`, `BuildingDef`, `WeaponDef`, `FactionDef`, plus value types `ResourceCost` and `Footprint` (in 2 × 2 unit build cells).
-- `DefaultDefinitions` mirrors `Design/GameDesign.md` (4 units, 5 structures, 4 weapons, 2 factions). Update the design tables and this file together; code is authoritative at runtime.
+- `DefaultDefinitions` mirrors `Design/GameDesign.md` (4 units, 5 structures, 4 weapons, 3 factions — Concord, Null and the environment-only Neutral faction). Update the design tables and this file together; code is authoritative at runtime.
 - `DefinitionRegistry` validates before exposing data: unique ids, non-empty names/roles, positive health/build time/speed/radius/weapon stats, non-negative costs/supply/armor, resolves weapon/prerequisite/produced-unit references, and rejects self-requirements. All errors are aggregated into one `ArgumentException` listing each problem.
 - Gameplay systems receive the registry and never hard-code stats. The prototype build radius is `DefinitionRegistry.BuildRadiusUnits = 12`.
+- Harvest balance (node reserve, capacity, harvest/deposit seconds, node radius, interaction padding) lives in `EconomyDef` as constants until a second node type exists.
 
 ### Entity model
 
-- `Entity` is a plain class: `EntityId`, `PlayerId`, `EntityKind`, the matching `UnitDef`/`BuildingDef` reference, `DefinitionId`, current/previous position (render interpolation), facing, health/max health, armor, radius, speed and a deferred-removal flag. Stats are copied at spawn.
-- `PlayerState` holds `FactionId`, alloy, energy and supply used/cap. Supply is maintained incrementally when units/structures spawn or are removed.
+- `Entity` is a plain class: `EntityId`, `PlayerId`, `EntityKind`, the matching `UnitDef`/`BuildingDef` reference, `DefinitionId`, current/previous position (render interpolation), facing, health/max health, armor, radius, speed and a deferred-removal flag. Stats are copied at spawn. Resource nodes use `EntityKind.ResourceNode`, carry a `Reserve`, and have no definition; Harvester units own a `HarvesterState`.
+- `PlayerState` holds `FactionId`, alloy, energy and supply used/cap. Supply is maintained incrementally when units/structures spawn or are removed. Nodes belong to `PlayerId.Neutral`, which exists for palettes/ownership checks only and is excluded from snapshots and checksums.
 - `World` owns the `DefinitionRegistry`, a seeded `Random`, both players, an ordered `List<Entity>` + id lookup, and a `WorldCommand` queue. `Step(dt)` copies previous positions, applies commands, removes dead/despawned entities at tick end, then increments the tick.
-- Commands are data records (`SpawnUnit`, `SpawnBuilding`, `Damage`, `Despawn`) applied only at tick start. Unknown targets are ignored; invalid commands never throw mid-tick.
-- `ComputeChecksum()` is a deterministic FNV-1a hash of tick, players and entities; `CreateSnapshot()` returns immutable entity/player snapshots for tests and replay tooling.
+- Commands are data records (`SpawnUnit`, `SpawnBuilding`, `SpawnResourceNode`, `Damage`, `Despawn`) applied only at tick start. Unknown targets are ignored; invalid commands never throw mid-tick.
+- `ComputeChecksum()` is a deterministic FNV-1a hash of tick, players and entities, including node reserves and harvester phase/cargo/timer; `CreateSnapshot()` returns immutable entity/player snapshots for tests and replay tooling.
 - `SpatialGrid` (T-010) hashes living entities into the same 2-unit `MapGrid` cells and is rebuilt at the end of every `Step`. It exposes radius queries (span or reused `List`, no per-query allocation), `FindNearestEnemy`, and `Count`; `World.Spatial` reflects the last completed tick.
 - A separate navigation grid for pathfinding is added in T-011; the spatial hash only answers proximity queries.
 
 ### Navigation and movement
 
-- `NavGrid` (T-011) is a passability grid over the same 120 × 120 map/2-unit cells (60 × 60), separate from the spatial hash. `World.Navigation` blocks/unblocks building footprints as structures spawn and are removed; resource nodes will do the same in T-018. Map edges are implicit blockers.
+- `NavGrid` (T-011) is a passability grid over the same 120 × 120 map/2-unit cells (60 × 60), separate from the spatial hash. `World.Navigation` blocks/unblocks building footprints as structures spawn and are removed; resource nodes block the single cell under their center, reference-counted so two nodes in one cell do not unblock each other (T-018). Map edges are implicit blockers.
 - `PathFinder` runs 8-way A* with an octile heuristic, reusable score/state arrays and a `PriorityQueue`. Diagonal steps require both adjacent orthogonal cells to be passable, so units cannot clip wall corners.
 - Paths are simplified with `NavGrid.HasLineOfSight` (Bresenham + orthogonal corner checks); every simplified segment is collision-free. The world-space overload returns cell centers and includes the start cell.
 - Randomized tests compare path cost against a reference Dijkstra and require ≤ 1.3× optimal; walls, blocked goals, corner traps and smoothing are covered.
@@ -152,12 +153,22 @@ The game project is an `Exe` (console attached) during development so logs and c
 - `Order` is a readonly record (`OrderType` + point/target/building/unit) with factories for `Move`, `AttackMove`, `Attack`, `Hold`, `Stop`, `Harvest`, `ReturnCargo`, `Build`, `Produce` and `SetRally`. Only fields relevant to the type are read.
 - Each unit owns an `OrderQueue` (capacity 4, FIFO, head order executes). `replace` clears the queue and stops current movement; non-replace appends. Orders are issued through `World.TryIssueOrder` → `IssueOrderCommand`, so validation and application happen at tick start; invalid orders return false immediately.
 - `OrderExecutor` validates ownership/targets/points, starts the head order before movement, and pops completed Move/AttackMove orders after movement. Move-like orders delegate to `World.MoveUnit`; Stop/Hold clear movement and set `HoldPosition` (movement skips held units).
-- Combat/harvest/build/produce/rally order types are defined but rejected until their systems land (T-018/T-021/T-024/T-028). Attack validates the enemy and chases the target position; range/weapon behavior comes with targeting.
+- Combat/build/produce/rally order types are defined but rejected until their systems land (T-021/T-024/T-028). Attack validates the enemy and chases the target position; range/weapon behavior comes with targeting.
+- Harvest/ReturnCargo are owned by `HarvestingSystem` but still flow through the queue: `Harvest` starts mining when it reaches the head (so shift-queued harvests do not jump ahead of earlier moves), `ReturnCargo` requires a node assignment. Both pop when the harvester state returns to idle.
+- Replacing or stopping an order resets the harvester state, but cargo is kept on the unit; `ReturnCargo` deliberately preserves the node so the trip resumes after unloading.
 - Queues, hold flags and current order data are included in the world checksum.
+
+### Harvesting
+
+- `HarvestingSystem` (`Core/Economy`) runs after movement and before order completion. `HarvestPhase` walks ToNode → Harvesting (2.2 s) → ToDropOff → Depositing (0.6 s) → back to ToNode, looping until the node is depleted or invalid.
+- Cargo is `min(22, node.Reserve)` per load; the reserve drops at the end of the harvest phase, and a node at zero reserve is removed at tick end. A loaded harvester still completes its delivery after the node disappears — the node is only validated while walking to or mining it.
+- Standing positions come from `TryFindStandPoint`: the point at `targetRadius + moverRadius + 1` on the approach side, otherwise the nearest passable cell in rings 1–5 around the target. Arrival tolerates 0.5 units extra because path following stops within its own tolerance. If no stand point exists the order aborts instead of oscillating.
+- Drop-offs are the nearest living building owned by the player with `BuildingDef.IsDropOff` (the Nexus). `World.TryFindNearestDropOff` is re-evaluated at each return, so a destroyed Nexus does not leave a harvester stuck.
+- `OrderController` context: right-clicking a node issues `Harvest` to the selected Harvesters only (other unit types ignore it and keep their selection); right-clicking an owned drop-off with a Harvester primary issues `ReturnCargo`. Nodes are never selectable.
 
 ### Order input
 
-- `OrderController` maps the current selection + cursor context to orders: right-click an enemy → `Attack`; right-click ground → `Move`; a selected structure + right-click ground → `SetRally` (stored on `Entity.RallyPoint` for T-024). Invalid targets/points are ignored without clearing the selection.
+- `OrderController` maps the current selection + cursor context to orders: right-click an enemy → `Attack`; right-click ground → `Move`; a selected structure + right-click ground → `SetRally` (stored on `Entity.RallyPoint` for T-024); right-click a node or owned drop-off → `Harvest`/`ReturnCargo` for Harvesters. Invalid targets/points are ignored without clearing the selection.
 - `A` arms attack-move (crosshair); the next left-click issues `AttackMove` instead of selecting. `S` stops, `H` holds; both cancel attack-move mode. Shift queues instead of replacing. `Esc` cancels attack-move, then clears selection, then exits.
 - Cursor feedback: crosshair when attack-move is armed or an enemy is hovered with units selected, arrow elsewhere/over the HUD.
 - Gameplay only reaches `World.TryIssueOrder`; the controller never mutates the world directly.
@@ -182,7 +193,7 @@ Later passes add the textured/grid ground (T-007), blob shadows, units/structure
 - **Lens:** 45° vertical FOV, near 0.5, far 500. `RtsCamera` drives the `CameraView`; the demo world starts at focus `(0, 0)` and distance 80 (max zoom) so both bases fit.
 - **Lighting:** `BasicEffect` with per-pixel lighting, ambient `0.42`, one directional light (`0.78`, direction `(-0.45, -1, -0.35)`), specular `0.08` / power 24. No textures yet.
 - **Draw list:** `SceneRenderer` keeps a preallocated `List<MeshDrawCommand>` of `(DrMeshPart, world, diffuse, emissive, texture, alpha, transparent)`; no per-frame allocation once the list capacity is reached. `SubmittedCount` / `CulledCount` / `DrawnCount` are exposed for debugging.
-- **World rendering:** `VectorFrontGame.CreateWorldScene` instantiates the registry/world and spawns 18 demo entities (both factions, all MVP model types) through `WorldCommand`s. Each frame maps `Entity` + faction to a cached `DrModel` (`EntityModels`) and submits it at `Vector3.Lerp(PreviousPosition, Position, SimulationClock.Alpha)`. Current smoke state: 80 cached meshes, 18 models, 18 entities.
+- **World rendering:** `VectorFrontGame.CreateWorldScene` instantiates the registry/world and spawns the demo scene (both factions, all MVP model types, four alloy nodes) through `WorldCommand`s. Each frame maps `Entity` + owner faction to a cached `DrModel` (`EntityModels`) and submits it at `Vector3.Lerp(PreviousPosition, Position, SimulationClock.Alpha)`. Current smoke state: 89 cached meshes, 19 models, 22 entities.
 - **Ground and shadows:** the ground is a 120 × 120 plane with UV scale 60, textured by a generated 128 px tile whose edge lines map to 2-unit `MapGrid` cells. Four thin boxes mark the map border. Every entity submits a scaled disc at its interpolated ground position (alpha 0.4, transparent pass); `ModelShadow` provides the per-`ModelId` radius.
 - **Build-grid overlay:** a second copy of the ground mesh at y = 0.03 uses a transparent cyan tile texture (alpha 120). Toggle with `G`; it defaults off and the `--build-grid` smoke flag enables it for deterministic screenshots.
 - **Transparent pass:** `SceneRenderer` collects textured/alpha commands (`SubmitTransparent`) and draws them after opaque geometry with `AlphaBlend` + `DepthRead` (no depth writes). Opaque commands use `Opaque` + `Default`.
@@ -291,7 +302,8 @@ Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count 
 - **Navigation:** nav-grid blocking/count/footprints and line-of-sight (including diagonal corner rejection); A* straights, diagonals, walls, blocked endpoints, corner traps, smoothing, world-space output, and building footprints blocking/unblocking in `World.Navigation`; 25 random obstacle maps compare path cost against reference Dijkstra within 1.3×.
 - **Movement:** arrival within tolerance and stop, facing toward velocity, wall detours, mid-route blocking with successful repath, rejection of blocked destinations/buildings, stop semantics, previous-position interpolation, five-unit anti-stacking (no pair closer than 1 unit) and deterministic movement checksums.
 - **Orders:** tick-start application, queue completion, sequential queued moves, replace semantics, capacity 4, stop/hold position retention, invalid targets/points/types/buildings, dead-target rejection and mid-queue replacement.
-- **Order controller:** context move/attack/rally, attack-move arming, stop/hold, shift queueing, no-selection no-ops, structure rally persistence and a full cross-map move integration test.
+- **Harvesting:** one full cycle (cargo 22, reserve decrement, deposit), phase timings (2.2 s / 0.6 s), steady-state cadence within 5 % over 8 cycles, reserve-limited loads, depletion removal + order completion, empty-cargo return resuming mining, unreachable node aborting cleanly, node nav blocking/freeing, rejection for non-Harvesters, and deterministic checksums across runs.
+- **Order controller:** context move/attack/rally/harvest/deposit, attack-move arming, stop/hold, shift queueing, no-selection no-ops, structure rally persistence, node context sending only Harvesters and a full cross-map move integration test.
 - **Picking:** ground point from a known camera, center-ray unit hit, misses, closest-unit selection, unit-over-structure priority, working at 20/45/80 zoom, off-center projection→ground round-trips, off-center entity hits, dead entities ignored, empty world, and invalid viewport rejection.
 - **Selection:** click replace, shift-add, structure-only click, unit-preferred primary, units-only box selection, empty-box clearing, dead pruning, control-group assign/recall, groups surviving deaths, empty-group clearing, invalid group rejection and lowest-group lookup for badges.
 - **Order markers:** lifetime expiry, individually ageing markers, zero-delta retention and bulk expiry leaving no residue.

@@ -1,4 +1,6 @@
 using Microsoft.Xna.Framework;
+using RealTimeStrategy.Core.Definitions;
+using RealTimeStrategy.Core.Economy;
 using RealTimeStrategy.Core.World;
 using WorldState = RealTimeStrategy.Core.World.World;
 
@@ -39,7 +41,16 @@ public sealed class OrderExecutor
 
             OrderType.Stop or OrderType.Hold => true,
 
-            // Harvest/Build/Produce are enabled by T-018/T-021/T-024.
+            OrderType.Harvest => entity.UnitDef?.Id == UnitId.Harvester &&
+                                 world.TryGetEntity(order.Target, out var node) &&
+                                 node.IsResourceNode &&
+                                 node.IsAlive &&
+                                 node.Reserve > 0,
+
+            OrderType.ReturnCargo => entity.UnitDef?.Id == UnitId.Harvester &&
+                                     entity.Harvester is { HasNode: true },
+
+            // Build/Produce are enabled by T-022/T-024.
             _ => false,
         };
     }
@@ -76,6 +87,12 @@ public sealed class OrderExecutor
         {
             entity.Orders!.Clear();
             world.StopUnit(entity.Id);
+
+            // ReturnCargo keeps the node assignment so the trip resumes after unloading.
+            if (order.Type != OrderType.ReturnCargo)
+            {
+                entity.Harvester?.Reset();
+            }
         }
 
         return entity.Orders!.TryEnqueue(order);
@@ -118,6 +135,21 @@ public sealed class OrderExecutor
                         }
 
                         if (!world.MoveUnit(entity.Id, target.Position))
+                        {
+                            queue.Dequeue();
+                            continue;
+                        }
+
+                        queue.Started = true;
+                        break;
+
+                    case OrderType.Harvest:
+                        HarvestingSystem.Assign(world, entity, order.Target);
+                        queue.Started = true;
+                        break;
+
+                    case OrderType.ReturnCargo:
+                        if (!HarvestingSystem.TryReturnCargo(world, entity))
                         {
                             queue.Dequeue();
                             continue;
@@ -177,6 +209,15 @@ public sealed class OrderExecutor
                     }
 
                     break;
+
+                case OrderType.Harvest:
+                case OrderType.ReturnCargo:
+                    if (entity.Harvester is null || entity.Harvester.Phase == HarvestPhase.None)
+                    {
+                        queue.Dequeue();
+                    }
+
+                    break;
             }
         }
     }
@@ -186,6 +227,7 @@ public sealed class OrderExecutor
         entity.Orders!.Clear();
         world.StopUnit(entity.Id);
         entity.HoldPosition = false;
+        entity.Harvester?.Reset();
     }
 
     private static bool IsValidPoint(Vector3 point) =>

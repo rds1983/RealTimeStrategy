@@ -380,6 +380,11 @@ public sealed class VectorFrontGame : Game
         QueueSpawn(PlayerId.Enemy, UnitId.Striker, 2f, 11f);
         QueueSpawn(PlayerId.Enemy, UnitId.Lancer, -1f, 7f);
 
+        QueueNode(-24f, -6f);
+        QueueNode(24f, 6f);
+        QueueNode(-6f, 22f);
+        QueueNode(6f, -22f);
+
         _world.Step(1f / 20f);
 
         if (_selectAllOnStart)
@@ -404,6 +409,11 @@ public sealed class VectorFrontGame : Game
     private void QueueSpawn(PlayerId owner, UnitId unit, float x, float z)
     {
         _world.Enqueue(new SpawnUnitCommand(owner, unit, new Vector3(x, 0f, z)));
+    }
+
+    private void QueueNode(float x, float z)
+    {
+        _world.Enqueue(new SpawnResourceNodeCommand(new Vector3(x, 0f, z)));
     }
 
     private void AddMapBorder()

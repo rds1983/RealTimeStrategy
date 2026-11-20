@@ -101,9 +101,17 @@ Energy is a slow, capped trickle rather than a harvestable resource: it rewards 
 | Harvest time | 2.2 s |
 | Deposit time | 0.6 s |
 | Harvester speed | 5.0 u/s |
-| Typical income | ~40 alloy/min per Harvester on a near node |
+| Typical income | 22 alloy per (2.2 s + 0.6 s + round-trip travel) |
 
 Harvesters are unarmed and fragile; raiding the enemy harvest line is a valid strategy.
+
+Behaviour:
+- Right-clicking a node assigns every selected Harvester to it; they walk to the nearest free cell beside the node, mine a full load, carry it to the nearest owned drop-off (the Nexus), unload, and walk back. The loop repeats until the node is empty.
+- Right-clicking the Nexus sends selected Harvesters to unload immediately and then resume their node.
+- A node occupies one 2 × 2 build cell (`NavGrid`) and blocks movement; it is removed when its reserve reaches zero, and any harvester already loaded still finishes its delivery.
+- Nodes are context targets only — left-clicking one never selects it.
+
+Income is distance-bound: at 5.0 u/s a node roughly 30 units from the Nexus yields about 90 alloy/min, while a 75-unit haul is needed to reach the earlier ~40 alloy/min figure. The per-trip numbers above are authoritative; if the economy proves too hot once spending exists, retune capacity or harvest time rather than travel speed.
 
 ### Supply
 
@@ -216,7 +224,7 @@ Camera: perspective, 45° field of view, pitch 55°, default yaw 45°, distance 
 
 Selection rules:
 
-- Clicking a unit selects only units; clicking a structure selects that structure.
+- Clicking a unit selects only units; clicking a structure selects that structure. Resource nodes are never selected — right-clicking one orders Harvesters to mine it.
 - A drag box selects the player's units inside it (units take priority over structures).
 - The selection panel and command card show the "primary" selection (first unit, or the structure).
 

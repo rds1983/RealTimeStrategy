@@ -257,6 +257,19 @@ public sealed class SelectionModelTests
         Assert.Equal(0, group);
     }
 
+    [Fact]
+    public void Clicking_a_resource_node_does_not_select_it()
+    {
+        var world = CreateWorld();
+        var node = world.SpawnResourceNode(new Vector3(4f, 0f, 4f));
+        var selection = new SelectionModel();
+
+        selection.Select(node, additive: false);
+
+        Assert.Equal(0, selection.Count);
+        Assert.Null(selection.Primary(world));
+    }
+
     private static CameraView CreateCamera()
     {
         var camera = new CameraView(MathHelper.PiOver4, 0.5f, 300f);

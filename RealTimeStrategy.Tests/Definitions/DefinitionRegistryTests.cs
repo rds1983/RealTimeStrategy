@@ -26,7 +26,7 @@ public sealed class DefinitionRegistryTests
         Assert.Equal(4, registry.Units.Count);
         Assert.Equal(5, registry.Buildings.Count);
         Assert.Equal(4, registry.Weapons.Count);
-        Assert.Equal(2, registry.Factions.Count);
+        Assert.Equal(3, registry.Factions.Count);
         Assert.Equal(12f, DefinitionRegistry.BuildRadiusUnits);
     }
 

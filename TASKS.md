@@ -127,20 +127,21 @@ Goal: the player can select and command units with the mouse.
 
 Goal: harvesting loop that the player can see and interrupt.
 
-- [ ] **T-018 — Alloy nodes and harvesting**
+- [x] **T-018 — Alloy nodes and harvesting**
   - Alloy node entities with reserves (add a `ResourceNode` kind to the world entity model); nodes block their `NavGrid` cells; extend `OrderExecutor` to accept `Harvest`/`ReturnCargo` and `OrderController` to context-click nodes/drop-offs; harvester state machine (seek → harvest → return → deposit), carry capacity, timings from the design doc.
   - Acceptance: one Harvester produces the documented rate ±5 % in simulation; tests for full/empty cargo, dead node, blocked path.
 
 - [ ] **T-019 — Resources, deposits and supply**
   - Nexus drop-off, player resources, supply used/cap, spend/refund helpers, read-only HUD snapshot.
   - Acceptance: arithmetic and cap tests; spending is atomic; refused purchase leaves state unchanged.
+  - Note from T-018: harvesting income is distance-bound (≈90 alloy/min for a node 30 units from the Nexus). Revisit capacity/harvest time when spending and the resource bar make the rate visible.
 
 - [ ] **T-020 — Reactors, energy and supply**
   - Passive energy generation per Reactor, energy cap, energy costs for advanced units.
   - Acceptance: generation matches design rates; destroying a Reactor stops income and frees supply; tests for cap clamping.
 
 - [ ] **T-021 — Node depletion and reassignment**
-  - Depleted nodes disappear; idle Harvesters pick the nearest available node (player-owned order preferred).
+  - Depleted-node removal and trip cleanup shipped with T-018. Remaining: idle Harvesters pick the nearest available node automatically (player-assigned order preferred), so a base is never left with stopped harvesters.
   - Acceptance: multi-harvester distribution tests; no harvester stuck on a dead node; empty map does not throw.
 
 ---
@@ -319,3 +320,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-015 | Selection and control groups | 2026-11-20 | 5e3c909 |
 | T-016 | Order issuing | 2026-11-20 | cdf5122 |
 | T-017 | Selection and order visuals | 2026-11-20 | 14df995 |
+| T-018 | Alloy nodes and harvesting | 2026-11-20 | _pending_ |
