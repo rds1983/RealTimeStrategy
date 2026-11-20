@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using AssetManagementBase;
 using DigitalRiseModel;
-using DigitalRiseModel.Primitives;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -31,6 +30,7 @@ public sealed class VectorFrontGame : Game
     private DebugOverlay _debugOverlay = null!;
     private SceneRenderer _sceneRenderer = null!;
     private CameraView _camera = null!;
+    private MeshLibrary _meshLibrary = null!;
     private DrMesh _groundMesh = null!;
     private DrMesh _boxMesh = null!;
     private readonly List<SceneObject> _sceneObjects = new();
@@ -78,8 +78,7 @@ public sealed class VectorFrontGame : Game
     {
         _debugOverlay.Dispose();
         _sceneRenderer.Dispose();
-        _groundMesh.Dispose();
-        _boxMesh.Dispose();
+        _meshLibrary.Dispose();
 
         base.UnloadContent();
     }
@@ -139,7 +138,8 @@ public sealed class VectorFrontGame : Game
                 var simulatedSeconds = _simulationClock.TickCount * (double)_simulationClock.TickInterval;
                 Console.WriteLine(
                     $"Smoke test complete: drew {_drawnFrames} frames in {_wallClock.Elapsed.TotalSeconds:0.00}s; " +
-                    $"sim tick {_simulationClock.TickCount} ({simulatedSeconds:0.00}s).");
+                    $"sim tick {_simulationClock.TickCount} ({simulatedSeconds:0.00}s); " +
+                    $"cached meshes {_meshLibrary.Count}.");
 
                 if (_screenshotPath != null)
                 {
@@ -158,6 +158,7 @@ public sealed class VectorFrontGame : Game
     private void CreateReferenceScene()
     {
         _sceneRenderer = new SceneRenderer(GraphicsDevice);
+        _meshLibrary = new MeshLibrary(GraphicsDevice);
 
         _camera = new CameraView(MathHelper.PiOver4, 0.5f, 500f);
         _camera.SetViewport(
@@ -165,13 +166,8 @@ public sealed class VectorFrontGame : Game
             GraphicsDevice.PresentationParameters.BackBufferHeight);
         _camera.LookAt(new Vector3(38f, 32f, 38f), new Vector3(0f, 1f, 0f));
 
-        _groundMesh = MeshPrimitives.CreatePlaneMesh(
-            GraphicsDevice,
-            120f,
-            120f,
-            normalDirection: NormalDirection.UpY);
-
-        _boxMesh = MeshPrimitives.CreateBoxMesh(GraphicsDevice, new Vector3(2f, 2f, 2f));
+        _groundMesh = _meshLibrary.GetPlane(new Vector2(120f, 120f));
+        _boxMesh = _meshLibrary.GetBox(new Vector3(2f, 2f, 2f));
 
         _sceneObjects.Add(new SceneObject(_groundMesh, Matrix.Identity, new Color(30, 38, 56)));
         _sceneObjects.Add(new SceneObject(

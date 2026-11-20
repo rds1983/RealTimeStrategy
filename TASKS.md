@@ -43,13 +43,13 @@ Goal: a window with a lit 3D scene, a working camera and a testable build.
   - Render a ground plane and a reference box; verify winding, normals and depth.
   - Acceptance: no z-fighting at default camera, stable 60 FPS, unit test for frustum/bounds math.
 
-- [ ] **T-004 — Procedural mesh library**
+- [x] **T-004 — Procedural mesh library**
   - `MeshLibrary` wrapping `MeshPrimitives` with a parameter-based cache (box, cylinder, sphere, cone, capsule, torus, disc, plane).
   - Dispose GPU resources on shutdown; replace the direct `MeshPrimitives` calls in `VectorFrontGame.CreateReferenceScene` with cached lookups.
   - Acceptance: repeated requests share one buffer; unit tests for cache keys and disposal; no leak after restart.
 
 - [ ] **T-005 — Model factory and palette**
-  - `ModelFactory` assembles named models from primitive parts with local transforms and materials (Harvester, Scout, Striker, Lancer, Nexus, Reactor, Fabricator, Foundry, Turret, alloy node, projectile, debris); dimensions start as local constants and are bound to definitions in T-008.
+  - `ModelFactory` assembles named models from primitive parts with local transforms and materials (Harvester, Scout, Striker, Lancer, Nexus, Reactor, Fabricator, Foundry, Turret, alloy node, projectile, debris); parts reference cached `MeshLibrary` meshes and never own them; dimensions start as local constants and are bound to definitions in T-008.
   - Faction palettes (Concord cyan / Null magenta) with emissive accents.
   - Acceptance: every model is visible, distinguishable at default zoom, and documented in `Design/GameDesign.md` if silhouettes change.
 
@@ -235,7 +235,7 @@ Goal: a complete, understandable interface.
 
 - [ ] **T-040 — Pause and end screens**
   - Pause overlay, victory/defeat screen with match time and unit summary, restart button, keyboard shortcuts.
-  - Acceptance: simulation frozen while paused; restart fully resets world, camera and UI; Esc does not quit mid-match without confirmation.
+  - Acceptance: simulation frozen while paused; restart fully resets world, camera and UI; Esc does not quit mid-match without confirmation; restart recreates/reuses GPU resources without leaking meshes.
 
 ---
 
@@ -304,3 +304,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-001 | Solution scaffold | 2026-11-20 | 7f86ca2 |
 | T-002 | Application shell and fixed-step loop | 2026-11-20 | 3801db7 |
 | T-003 | 3D rendering foundation | 2026-11-20 | 673c8ad |
+| T-004 | Procedural mesh library | 2026-11-20 | _pending_ |
