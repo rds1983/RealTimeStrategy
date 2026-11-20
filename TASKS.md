@@ -308,4 +308,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-004 | Procedural mesh library | 2026-11-20 | c6a4323 |
 | T-005 | Model factory and palette | 2026-11-20 | 5dd25b3 |
 | T-006 | RTS camera, smooth rotation and controls HUD | 2026-11-20 | 5e75f29 |
-| T-007 | Ground, build grid and blob shadows | 2026-11-20 | _pending_ |
+| T-007 | Ground, build grid and blob shadows | 2026-11-20 | 38ce3cf |
