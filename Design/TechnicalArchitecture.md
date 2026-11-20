@@ -47,7 +47,8 @@ RealTimeStrategy/
       DebugOverlayPanel.cs       hand-written runtime behavior (kept by the exporter)
       DebugOverlayPanel.Generated.cs  myra-export output (never edit by hand)
     Input/                       input state, picking, selection controller, command controller
-    Camera/                      RtsCamera
+    Camera/CameraView.cs         view/projection matrices + frustum culling (unit tested)
+    Camera/                      RtsCamera (T-006)
     Audio/                       placeholder SFX hooks
   Data/                          JSON map/balance overrides (optional, later)
 RealTimeStrategy.Tests/          xUnit, ProjectReference to the game project
@@ -128,26 +129,35 @@ The game project is an `Exe` (console attached) during development so logs and c
 
 ## 5. Rendering
 
-### Frame pipeline
+### Frame pipeline (foundation, T-003)
 
-1. Clear, update camera matrices, build the visible draw list (frustum cull by bounding sphere).
-2. Draw ground plane with a generated grid texture.
-3. Draw blob shadows (transparent discs) for units and structures.
-4. Draw structures, then units, then projectiles/effects (sorted by mesh to reduce state changes).
-5. Draw selection rings, move markers and debug overlays (depth-tested lines).
-6. Draw Myra desktop last, in a separate 2D pass.
+1. `GraphicsDevice.Clear` clears color and depth; the camera supplies view/projection and a frustum.
+2. `VectorFrontGame.Draw` fills a per-frame draw list (`SceneRenderer.BeginFrame` → `Submit` → `Render`).
+3. `Render` culls each command by transforming the mesh's local `BoundingBox` to world space and testing it against the frustum.
+4. Surviving meshes are drawn from their existing `DrMeshPart` vertex/index buffers with one shared `BasicEffect`.
+5. Myra's desktop renders last, after the 3D pass.
+
+Later passes add the textured/grid ground (T-007), blob shadows, units/structures/projectiles (T-005+), and selection markers (T-017).
+
+### Renderer details
+
+- **Coordinates:** right-handed (`Matrix.CreateLookAt` + `CreatePerspectiveFieldOfView`), default `toLeftHanded: false` DigitalRiseModel primitives, `CullMode.CullCounterClockwiseFace`.
+- **Lens:** 45° vertical FOV, near 0.5, far 500. The current reference camera is fixed at `(38, 32, 38)` looking at `(0, 1, 0)`; `RtsCamera` (T-006) will drive the same `CameraView`.
+- **Lighting:** `BasicEffect` with per-pixel lighting, ambient `0.42`, one directional light (`0.78`, direction `(-0.45, -1, -0.35)`), specular `0.08` / power 24. No textures yet.
+- **Draw list:** `SceneRenderer` keeps a preallocated `List<MeshDrawCommand>` of `(DrMesh, world matrix, diffuse color)`; no per-frame allocation once the list capacity is reached. `SubmittedCount` / `CulledCount` / `DrawnCount` are exposed for debugging.
+- **Reference scene:** `VectorFrontGame.CreateReferenceScene` builds a 120 × 120 ground plane (`NormalDirection.UpY`, y = 0) and three boxes (2 × 2 × 2, two scaled) to validate winding, normals, depth and lighting. It is temporary and is replaced once the world supplies entities.
 
 ### Mesh and model pipeline
 
-- `MeshLibrary` creates and caches `DrMesh` instances once from `MeshPrimitives` (unit box, cylinder, sphere, cone, capsule, torus, disc, plane variants). Cache key = primitive + parameters, so repeated models share vertex/index buffers.
-- `ModelFactory` assembles named models from parts, e.g. `Striker = torso box + 2 leg cylinders + cockpit sphere + gun barrel cylinder`. Each part has a mesh key, local transform and material id. Models are built once at startup.
-- `DrModel`/`DrMeshPart` are drawn manually: set `BasicEffect.World/View/Projection`, `DiffuseColor`, `EmissiveColor`, then `GraphicsDevice.DrawIndexedPrimitives`.
-- Materials are simple: chassis diffuse color, emissive accent color, ambient/directional light, no textures except the ground grid and UI. Emissive accents plus additive glow discs provide the sci-fi look without custom shaders.
-- Shadows are fake (blob discs). Real shadow mapping and bloom are post-prototype.
+- `MeshLibrary` (T-004) creates and caches `DrMesh` instances once from `MeshPrimitives` (unit box, cylinder, sphere, cone, capsule, torus, disc, plane variants). Cache key = primitive + parameters, so repeated models share vertex/index buffers. T-003 currently calls `MeshPrimitives` directly for the reference scene.
+- `ModelFactory` (T-005) assembles named models from parts, e.g. `Striker = torso box + 2 leg cylinders + cockpit sphere + gun barrel cylinder`. Each part has a mesh key, local transform and material id. Models are built once at startup.
+- `DrMesh`/`DrMeshPart` are drawn manually: set `BasicEffect.World/View/Projection`, `DiffuseColor`, then `GraphicsDevice.DrawIndexedPrimitives`.
+- Materials are simple: chassis diffuse color, ambient/directional light, no textures except the ground grid and UI. Emissive accents plus additive glow discs provide the sci-fi look without custom shaders.
+- Shadows are fake (blob discs, T-007). Real shadow mapping and bloom are post-prototype.
 
 ### Camera
 
-`RtsCamera` keeps focus point, yaw, pitch (fixed 55°), distance (20–80), and computes view/projection. Pan uses arrow keys, edge scroll or middle-mouse drag, is focus-plane based and scaled by zoom; rotation snaps in 45° steps. Camera bounds are clamped to the map plus a margin.
+`CameraView` (T-003) owns the view/projection matrices and a `BoundingFrustum`, with `SetViewport`, `LookAt` and two `IsVisible` overloads (sphere, or local bounds + world matrix). It is pure math and unit tested. `RtsCamera` (T-006) keeps focus point, yaw, pitch (fixed 55°), distance (20–80) and feeds a `CameraView`; pan uses arrow keys, edge scroll or middle-mouse drag, rotation snaps in 45° steps, bounds clamp to the map plus a margin.
 
 ### Picking
 
@@ -203,6 +213,7 @@ Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count 
 - **Headless world tests:** `new World(seed, map)`, enqueue commands, `Step(0.05f)` N times, assert state. No graphics, no clock.
 - **Determinism test:** run the same seed + command script twice and compare a world checksum/snapshot.
 - **Timing tests:** `SimulationClock` covers 20 Hz accumulation across 60/20 FPS frame patterns, partial ticks and alpha, invalid elapsed input, and the 5-step catch-up clamp (excess time dropped, not banked).
+- **Rendering math:** `CameraView` tests cover frustum visibility (origin, behind camera, outside FOV, beyond far plane, near-plane intersection), world-matrix bounds culling, `LookAt` changes, aspect/projection and invalid input.
 - **Manual smoke checklist** for rendering/UI tasks: window opens, camera pans/zooms, models visible with correct colors, no exceptions in log, 60 FPS.
 - **Smoke test:** `dotnet run --project RealTimeStrategy -- --smoke-test 30` creates the window/graphics device, renders 30 frames and exits with code 0. Add `--overlay` to force the debug overlay visible and exercise the Myra/font path. Add `--screenshot <path.png>` to save the backbuffer of the final frame — use this for visual checks instead of OS window capture.
 - Tests must be fast (< 10 s total) and must not require a display.

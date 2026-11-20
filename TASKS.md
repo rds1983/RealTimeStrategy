@@ -38,14 +38,14 @@ Goal: a window with a lit 3D scene, a working camera and a testable build.
   - `--overlay` shows the overlay at startup; `--screenshot <file>` saves the final smoke-test frame for visual verification.
   - Acceptance: fixed-step tests (20 ticks per simulated second at 60 and 20 FPS, catch-up clamp); overlay toggles; label text refreshed at 4 Hz, not per frame.
 
-- [ ] **T-003 — 3D rendering foundation**
+- [x] **T-003 — 3D rendering foundation**
   - Depth buffer, `BasicEffect` lighting (ambient + directional), camera matrices, frustum culling, draw-list API.
   - Render a ground plane and a reference box; verify winding, normals and depth.
   - Acceptance: no z-fighting at default camera, stable 60 FPS, unit test for frustum/bounds math.
 
 - [ ] **T-004 — Procedural mesh library**
   - `MeshLibrary` wrapping `MeshPrimitives` with a parameter-based cache (box, cylinder, sphere, cone, capsule, torus, disc, plane).
-  - Dispose GPU resources on shutdown; expose part/mesh access for the renderer.
+  - Dispose GPU resources on shutdown; replace the direct `MeshPrimitives` calls in `VectorFrontGame.CreateReferenceScene` with cached lookups.
   - Acceptance: repeated requests share one buffer; unit tests for cache keys and disposal; no leak after restart.
 
 - [ ] **T-005 — Model factory and palette**
@@ -55,12 +55,13 @@ Goal: a window with a lit 3D scene, a working camera and a testable build.
 
 - [ ] **T-006 — RTS camera**
   - Focus point + yaw/pitch/distance; arrow keys/edge pan, MMB drag, wheel zoom (20–80), Q/E 45° yaw steps, map clamping.
+  - Drive the existing `CameraView` (replace the fixed reference camera in `VectorFrontGame`).
   - Expose `FocusOn(point)` for entity-bound keys, wired in T-015.
   - Add camera focus coordinates to the debug overlay panel (T-002).
   - Acceptance: camera math unit tests (clamping, yaw wrap, pan scaling); no gimbal flip; smooth zoom.
 
 - [ ] **T-007 — Ground, build grid and blob shadows**
-  - Generated grid texture, map border, build-grid overlay toggle, fake shadows under entities.
+  - Generated grid texture, map border, build-grid overlay toggle, fake shadows under entities; replace the plain reference plane from T-003.
   - Acceptance: grid aligns exactly with the 2 × 2 unit grid used by placement; shadows follow interpolated positions; F1 shows grid coordinates.
 
 ---
@@ -302,3 +303,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | --- | --- | --- | --- |
 | T-001 | Solution scaffold | 2026-11-20 | 7f86ca2 |
 | T-002 | Application shell and fixed-step loop | 2026-11-20 | 3801db7 |
+| T-003 | 3D rendering foundation | 2026-11-20 | _pending_ |

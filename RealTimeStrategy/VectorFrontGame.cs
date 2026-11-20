@@ -1,11 +1,14 @@
 using System.Diagnostics;
 using AssetManagementBase;
+using DigitalRiseModel;
+using DigitalRiseModel.Primitives;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Myra;
 using RealTimeStrategy.Core;
 using RealTimeStrategy.Core.Simulation;
+using RealTimeStrategy.Presentation.Camera;
 using RealTimeStrategy.Presentation.Content;
 using RealTimeStrategy.Presentation.Rendering;
 
@@ -26,6 +29,11 @@ public sealed class VectorFrontGame : Game
 
     private SimulationClock _simulationClock = null!;
     private DebugOverlay _debugOverlay = null!;
+    private SceneRenderer _sceneRenderer = null!;
+    private CameraView _camera = null!;
+    private DrMesh _groundMesh = null!;
+    private DrMesh _boxMesh = null!;
+    private readonly List<SceneObject> _sceneObjects = new();
     private KeyboardState _previousKeyboard;
     private int _drawnFrames;
 
@@ -61,12 +69,17 @@ public sealed class VectorFrontGame : Game
         _debugOverlay = new DebugOverlay();
         _debugOverlay.SetVisible(_startWithOverlay);
 
+        CreateReferenceScene();
+
         base.LoadContent();
     }
 
     protected override void UnloadContent()
     {
         _debugOverlay.Dispose();
+        _sceneRenderer.Dispose();
+        _groundMesh.Dispose();
+        _boxMesh.Dispose();
 
         base.UnloadContent();
     }
@@ -108,6 +121,14 @@ public sealed class VectorFrontGame : Game
 
         base.Draw(gameTime);
 
+        _sceneRenderer.BeginFrame(_camera);
+        foreach (var sceneObject in _sceneObjects)
+        {
+            _sceneRenderer.Submit(sceneObject.Mesh, sceneObject.World, sceneObject.Color);
+        }
+
+        _sceneRenderer.Render();
+
         _debugOverlay.Draw();
 
         if (_smokeTestFrameLimit is int limit)
@@ -128,6 +149,43 @@ public sealed class VectorFrontGame : Game
                 Exit();
             }
         }
+    }
+
+    /// <summary>
+    /// Temporary fixed scene used to validate the 3D pipeline. Replaced by the world renderer
+    /// and RTS camera in later tasks.
+    /// </summary>
+    private void CreateReferenceScene()
+    {
+        _sceneRenderer = new SceneRenderer(GraphicsDevice);
+
+        _camera = new CameraView(MathHelper.PiOver4, 0.5f, 500f);
+        _camera.SetViewport(
+            GraphicsDevice.PresentationParameters.BackBufferWidth,
+            GraphicsDevice.PresentationParameters.BackBufferHeight);
+        _camera.LookAt(new Vector3(38f, 32f, 38f), new Vector3(0f, 1f, 0f));
+
+        _groundMesh = MeshPrimitives.CreatePlaneMesh(
+            GraphicsDevice,
+            120f,
+            120f,
+            normalDirection: NormalDirection.UpY);
+
+        _boxMesh = MeshPrimitives.CreateBoxMesh(GraphicsDevice, new Vector3(2f, 2f, 2f));
+
+        _sceneObjects.Add(new SceneObject(_groundMesh, Matrix.Identity, new Color(30, 38, 56)));
+        _sceneObjects.Add(new SceneObject(
+            _boxMesh,
+            Matrix.CreateTranslation(0f, 1f, 0f),
+            new Color(82, 203, 255)));
+        _sceneObjects.Add(new SceneObject(
+            _boxMesh,
+            Matrix.CreateScale(1.5f) * Matrix.CreateTranslation(-9f, 1.5f, 7f),
+            new Color(222, 92, 236)));
+        _sceneObjects.Add(new SceneObject(
+            _boxMesh,
+            Matrix.CreateScale(0.75f) * Matrix.CreateTranslation(11f, 0.75f, -5f),
+            new Color(92, 240, 172)));
     }
 
     /// <summary>
@@ -204,4 +262,6 @@ public sealed class VectorFrontGame : Game
 
         return null;
     }
+
+    private readonly record struct SceneObject(DrMesh Mesh, Matrix World, Color Color);
 }
