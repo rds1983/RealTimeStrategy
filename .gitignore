@@ -1,0 +1,35 @@
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+artifacts/
+publish/
+
+# Test and coverage
+TestResults/
+coverage/
+*.trx
+*.coverage
+
+# IDE
+.vs/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+*.sln.docstates
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and crash dumps
+*.log
+*.dmp
+
+# Local tooling
+.vscode/

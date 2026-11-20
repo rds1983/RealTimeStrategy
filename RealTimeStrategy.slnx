@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="RealTimeStrategy/RealTimeStrategy.csproj" />
+  <Project Path="RealTimeStrategy.Tests/RealTimeStrategy.Tests.csproj" />
+</Solution>

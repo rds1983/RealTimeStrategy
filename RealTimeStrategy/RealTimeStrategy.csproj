@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RollForward>Major</RollForward>
+    <RootNamespace>RealTimeStrategy</RootNamespace>
+    <AssemblyName>RealTimeStrategy</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <TieredPGO>true</TieredPGO>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DigitalRiseModel.MonoGame" Version="0.7.6" />
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.6.1" />
+    <PackageReference Include="Myra" Version="1.6.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\**\*" Exclude="Assets\**\.gitkeep" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
