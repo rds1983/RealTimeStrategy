@@ -32,7 +32,7 @@ RealTimeStrategy/
     World/MapGrid.cs             map size, 2-unit cell conversion (unit tested)
     World/                       World, Entity, PlayerState, EntityId, SpatialGrid,
                                  command records, snapshots + checksum (unit tested)
-    Orders/                      Order types, OrderQueue, order execution
+    Orders/                     Order/OrderType/OrderQueue/OrderExecutor (unit tested)
     Navigation/                 NavGrid, PathFinder (8-way A*, LOS smoothing, unit tested)
     Movement/                    MoveState + MovementSystem (steering, separation, repath)
     Combat/                      weapons, targeting, projectiles, damage
@@ -149,9 +149,11 @@ The game project is an `Exe` (console attached) during development so logs and c
 
 ### Orders
 
-- `Order` is a small value type/enum + parameters: `Move`, `AttackMove`, `Attack(target)`, `Hold`, `Stop`, `Harvest(node)`, `ReturnCargo`, `Build(placement)`, `Produce(defId)`, `SetRally(point)`.
-- Each unit has a queue (max 4 for player orders, unlimited internal for AI); structures only accept production/rally orders.
-- `OrderExecutor` is a per-tick system that inspects the current order and writes movement/weapon intents. Combat units auto-acquire targets only between explicit orders.
+- `Order` is a readonly record (`OrderType` + point/target/building/unit) with factories for `Move`, `AttackMove`, `Attack`, `Hold`, `Stop`, `Harvest`, `ReturnCargo`, `Build`, `Produce` and `SetRally`. Only fields relevant to the type are read.
+- Each unit owns an `OrderQueue` (capacity 4, FIFO, head order executes). `replace` clears the queue and stops current movement; non-replace appends. Orders are issued through `World.TryIssueOrder` → `IssueOrderCommand`, so validation and application happen at tick start; invalid orders return false immediately.
+- `OrderExecutor` validates ownership/targets/points, starts the head order before movement, and pops completed Move/AttackMove orders after movement. Move-like orders delegate to `World.MoveUnit`; Stop/Hold clear movement and set `HoldPosition` (movement skips held units).
+- Combat/harvest/build/produce/rally order types are defined but rejected until their systems land (T-018/T-021/T-024/T-028). Attack currently validates the enemy and chases the target position; range/weapon behavior comes with targeting.
+- Queues, hold flags and current order data are included in the world checksum.
 
 ---
 
@@ -265,6 +267,7 @@ Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count 
 - **Spatial grid:** randomized radius queries match brute force, nearest-enemy ignores allies and range, rebuild drops despawned entities, span queries report total matches even with a small buffer, map-edge queries stay in bounds, and 1,000 radius queries over 300 units complete in ~4 ms (budget 200 ms in the test).
 - **Navigation:** nav-grid blocking/count/footprints and line-of-sight (including diagonal corner rejection); A* straights, diagonals, walls, blocked endpoints, corner traps, smoothing, world-space output, and building footprints blocking/unblocking in `World.Navigation`; 25 random obstacle maps compare path cost against reference Dijkstra within 1.3×.
 - **Movement:** arrival within tolerance and stop, facing toward velocity, wall detours, mid-route blocking with successful repath, rejection of blocked destinations/buildings, stop semantics, previous-position interpolation, five-unit anti-stacking (no pair closer than 1 unit) and deterministic movement checksums.
+- **Orders:** tick-start application, queue completion, sequential queued moves, replace semantics, capacity 4, stop/hold position retention, invalid targets/points/types/buildings, dead-target rejection and mid-queue replacement.
 - **Determinism test:** run the same seed + command script twice and compare a world checksum/snapshot.
 - **Timing tests:** `SimulationClock` covers 20 Hz accumulation across 60/20 FPS frame patterns, partial ticks and alpha, invalid elapsed input, and the 5-step catch-up clamp (excess time dropped, not banked).
 - **Rendering math:** `CameraView` tests cover frustum visibility (origin, behind camera, outside FOV, beyond far plane, near-plane intersection), world-matrix bounds culling, `LookAt` changes, aspect/projection and invalid input.

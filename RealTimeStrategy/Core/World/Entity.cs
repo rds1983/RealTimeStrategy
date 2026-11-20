@@ -1,6 +1,7 @@
 using Microsoft.Xna.Framework;
 using RealTimeStrategy.Core.Definitions;
 using RealTimeStrategy.Core.Movement;
+using RealTimeStrategy.Core.Orders;
 
 namespace RealTimeStrategy.Core.World;
 
@@ -49,6 +50,11 @@ public sealed class Entity
         Position = position;
         PreviousPosition = position;
         Health = MaxHealth;
+
+        if (kind == EntityKind.Unit)
+        {
+            Orders = new OrderQueue();
+        }
     }
 
     public EntityId Id { get; }
@@ -80,6 +86,10 @@ public sealed class Entity
     public float Speed { get; }
 
     public MoveState? Move { get; internal set; }
+
+    public OrderQueue? Orders { get; }
+
+    public bool HoldPosition { get; internal set; }
 
     public bool PendingRemoval { get; internal set; }
 

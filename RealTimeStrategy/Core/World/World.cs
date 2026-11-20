@@ -2,6 +2,7 @@ using Microsoft.Xna.Framework;
 using RealTimeStrategy.Core.Definitions;
 using RealTimeStrategy.Core.Movement;
 using RealTimeStrategy.Core.Navigation;
+using RealTimeStrategy.Core.Orders;
 
 namespace RealTimeStrategy.Core.World;
 
@@ -16,6 +17,7 @@ public sealed class World
 
     private readonly DefinitionRegistry _definitions;
     private readonly MovementSystem _movement;
+    private readonly OrderExecutor _orders = new();
     private readonly List<Entity> _entities = new();
     private readonly Dictionary<EntityId, Entity> _byId = new();
     private readonly List<WorldCommand> _commands = new();
@@ -121,6 +123,40 @@ public sealed class World
         return true;
     }
 
+    /// <summary>
+    /// Validates and enqueues an order command. The order is applied at the next tick start;
+    /// invalid orders are rejected immediately without touching the entity.
+    /// </summary>
+    public bool TryIssueOrder(EntityId id, Order order, bool replace = true)
+    {
+        if (!_byId.TryGetValue(id, out var entity) || !_orders.CanIssue(this, entity, order))
+        {
+            return false;
+        }
+
+        if (!replace && entity.Orders!.Count + CountPendingOrders(id) >= OrderQueue.Capacity)
+        {
+            return false;
+        }
+
+        Enqueue(new IssueOrderCommand(id, order, replace));
+        return true;
+    }
+
+    private int CountPendingOrders(EntityId id)
+    {
+        var count = 0;
+        foreach (var command in _commands)
+        {
+            if (command is IssueOrderCommand issue && issue.Entity == id && !issue.Replace)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
     public void Step(float deltaSeconds)
     {
         if (deltaSeconds < 0 || float.IsNaN(deltaSeconds) || float.IsInfinity(deltaSeconds))
@@ -136,7 +172,9 @@ public sealed class World
         ApplyCommands();
         RemoveDeadEntities();
         Spatial.Rebuild(_entities);
+        _orders.BeginTick(this);
         _movement.Step(this, deltaSeconds);
+        _orders.EndTick(this);
         RemoveDeadEntities();
         Spatial.Rebuild(_entities);
         TickCount++;
@@ -197,6 +235,22 @@ public sealed class World
                 hash = Mix(hash, (ulong)BitConverter.SingleToUInt32Bits(move.Destination.X));
                 hash = Mix(hash, (ulong)BitConverter.SingleToUInt32Bits(move.Destination.Z));
             }
+
+            hash = Mix(hash, entity.HoldPosition ? 1UL : 0UL);
+
+            if (entity.Orders is { } orders)
+            {
+                hash = Mix(hash, (ulong)orders.Count);
+                foreach (var order in orders.Orders)
+                {
+                    hash = Mix(hash, (ulong)order.Type);
+                    hash = Mix(hash, (ulong)BitConverter.SingleToUInt32Bits(order.Point.X));
+                    hash = Mix(hash, (ulong)BitConverter.SingleToUInt32Bits(order.Point.Z));
+                    hash = Mix(hash, (ulong)order.Target.Value);
+                    hash = Mix(hash, (ulong)order.Building);
+                    hash = Mix(hash, (ulong)order.Unit);
+                }
+            }
         }
 
         foreach (var playerId in new[] { PlayerId.Player, PlayerId.Enemy })
@@ -235,6 +289,12 @@ public sealed class World
                     if (_byId.TryGetValue(despawn.Target, out var removed))
                     {
                         removed.PendingRemoval = true;
+                    }
+                    break;
+                case IssueOrderCommand issueOrder:
+                    if (_byId.TryGetValue(issueOrder.Entity, out var ordered))
+                    {
+                        _orders.Issue(this, ordered, issueOrder.Order, issueOrder.Replace);
                     }
                     break;
                 default:

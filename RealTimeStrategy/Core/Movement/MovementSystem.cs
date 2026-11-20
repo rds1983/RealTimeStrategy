@@ -79,6 +79,13 @@ public sealed class MovementSystem
     private void UpdateUnit(WorldState world, Entity entity, float deltaSeconds)
     {
         var state = entity.Move!;
+
+        if (entity.HoldPosition)
+        {
+            state.Velocity = Vector3.Zero;
+            return;
+        }
+
         var speed = entity.Speed;
         var desired = Vector3.Zero;
 

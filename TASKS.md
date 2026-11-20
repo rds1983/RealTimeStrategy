@@ -95,7 +95,7 @@ Goal: deterministic headless world with movement and orders.
   - Waypoint following with world paths from `PathFinder`, acceleration/deceleration, separation via `World.Spatial` neighbor queries, stuck detection and repath, facing/rotation toward velocity.
   - Acceptance: units reach destinations within tolerance, do not pile on one point, recover from blocked paths in tests.
 
-- [ ] **T-013 — Orders and command queue**
+- [x] **T-013 — Orders and command queue**
   - `Order` value types (`Move`, `AttackMove`, `Attack`, `Hold`, `Stop`, `Harvest`, `ReturnCargo`, `Build`, `Produce`, `SetRally`), queue limits, validation, `OrderExecutor`; issue them as `WorldCommand`s applied by the existing tick-start queue rather than adding a second command path. Move/Stop delegate to `World.MoveUnit`/`World.StopUnit`; attack/hold will consume the same `MoveState`.
   - Acceptance: queue transitions, replacement rules and invalid orders covered by tests; units hold last position on `Stop`.
 
@@ -114,7 +114,7 @@ Goal: the player can select and command units with the mouse.
   - Acceptance: selection tests (empty box, mixed selection, dead entities pruned); control groups survive deaths.
 
 - [ ] **T-016 — Order issuing**
-  - Right-click context orders (move via `World.MoveUnit`, attack, harvest, deposit, rally), `A` + click attack-move, `S` stop, `H` hold, contextual cursor feedback.
+  - Right-click context orders issued through `World.TryIssueOrder` (move, attack, harvest, deposit, rally), `A` + click attack-move, `S` stop, `H` hold, contextual cursor feedback.
   - Acceptance: each order reaches the correct entity type (rally is stored for T-024); invalid targets ignored without deselecting; integration test drives a unit across the map.
 
 - [ ] **T-017 — Selection and order visuals**
@@ -128,7 +128,7 @@ Goal: the player can select and command units with the mouse.
 Goal: harvesting loop that the player can see and interrupt.
 
 - [ ] **T-018 — Alloy nodes and harvesting**
-  - Alloy node entities with reserves (add a `ResourceNode` kind to the world entity model); nodes block their `NavGrid` cells, harvester state machine (seek → harvest → return → deposit), carry capacity, timings from the design doc.
+  - Alloy node entities with reserves (add a `ResourceNode` kind to the world entity model); nodes block their `NavGrid` cells; extend `OrderExecutor` to accept `Harvest`/`ReturnCargo`; harvester state machine (seek → harvest → return → deposit), carry capacity, timings from the design doc.
   - Acceptance: one Harvester produces the documented rate ±5 % in simulation; tests for full/empty cargo, dead node, blocked path.
 
 - [ ] **T-019 — Resources, deposits and supply**
@@ -192,7 +192,7 @@ Goal: readable, testable combat that decides the match.
   - Acceptance: no references to dead entities survive a tick; selection/production references cleaned up; tests for simultaneous kills.
 
 - [ ] **T-031 — Turrets and combat orders**
-  - Turret auto-fire, `AttackMove` (engage then continue), `Hold` (no chase), `Stop`, chase leash.
+  - Turret auto-fire, `AttackMove` (engage then continue), `Hold` (no chase), `Stop`, chase leash; `AttackMove` and `Attack` orders complete when combat resolves.
   - Acceptance: behavior tests for each stance; turrets never move; attack-move reaches destination after clearing enemies.
 
 - [ ] **T-032 — Damage feedback and health bars**
@@ -314,3 +314,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-010 | Spatial grid and queries | 2026-11-20 | 0ce671d |
 | T-011 | Navigation grid and A* | 2026-11-20 | f07ee62 |
 | T-012 | Movement and steering | 2026-11-20 | 0541a35 |
+| T-013 | Orders and command queue | 2026-11-20 | _pending_ |
