@@ -295,4 +295,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 
 | Task | Title | Date | Commit |
 | --- | --- | --- | --- |
-| T-001 | Solution scaffold | 2026-11-20 | _pending_ |
+| T-001 | Solution scaffold | 2026-11-20 | 7f86ca2 |
