@@ -21,6 +21,27 @@ Wireframe-era clarity with modern sci-fi presentation. The player commands a sma
 
 **Non-goals for the prototype:** campaign, multiplayer, save/load, fog of war, voice acting, imported art assets.
 
+### Model silhouettes
+
+Every model is assembled at runtime from boxes, cylinders, cones, spheres and a torus. The goal is a readable silhouette at RTS zoom, not detail.
+
+| Model | Silhouette cues |
+| --- | --- |
+| Harvester | Low cargo chassis, two side hover pods, front scoop, glowing engine dots. |
+| Scout | Slim dart fuselage, swept wings, twin rear engines, tail fin. |
+| Striker | Biped: box torso, shoulder pads, two forward guns, bright visor. |
+| Lancer | Heavy biped: oversized shoulder cannon, thick legs, back antenna. |
+| Nexus | Hex platform, ringed glowing core, tall spire, four pylons with glowing tips. |
+| Reactor | Cylindrical core, glowing torus, three cooling fins, cap cone. |
+| Fabricator | Wide plant, gantry + crane hook, side tanks, glowing front vent. |
+| Foundry | Blocky furnace, twin chimneys with glowing rings, bright furnace door. |
+| Turret | Round base, rotating head, twin barrels with glowing muzzles, sensor orb. |
+| Alloy node | Cluster of glowing crystals on grey rocks. |
+| Projectile | Small glowing sphere with a short tail. |
+| Debris | A few small tumbling panels. |
+
+Accent parts use an emissive material: a dark base color plus the faction accent, so they read as lit energy rather than white highlights.
+
 ---
 
 ## 2. Setting

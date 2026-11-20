@@ -31,9 +31,10 @@ public sealed class VectorFrontGame : Game
     private SceneRenderer _sceneRenderer = null!;
     private CameraView _camera = null!;
     private MeshLibrary _meshLibrary = null!;
+    private ModelFactory _modelFactory = null!;
     private DrMesh _groundMesh = null!;
-    private DrMesh _boxMesh = null!;
     private readonly List<SceneObject> _sceneObjects = new();
+    private readonly List<GalleryItem> _gallery = new();
     private KeyboardState _previousKeyboard;
     private int _drawnFrames;
 
@@ -69,7 +70,7 @@ public sealed class VectorFrontGame : Game
         _debugOverlay = new DebugOverlay();
         _debugOverlay.SetVisible(_startWithOverlay);
 
-        CreateReferenceScene();
+        CreateModelGallery();
 
         base.LoadContent();
     }
@@ -126,6 +127,11 @@ public sealed class VectorFrontGame : Game
             _sceneRenderer.Submit(sceneObject.Mesh, sceneObject.World, sceneObject.Color);
         }
 
+        foreach (var galleryItem in _gallery)
+        {
+            _sceneRenderer.Submit(galleryItem.Model, galleryItem.World);
+        }
+
         _sceneRenderer.Render();
 
         _debugOverlay.Draw();
@@ -139,7 +145,7 @@ public sealed class VectorFrontGame : Game
                 Console.WriteLine(
                     $"Smoke test complete: drew {_drawnFrames} frames in {_wallClock.Elapsed.TotalSeconds:0.00}s; " +
                     $"sim tick {_simulationClock.TickCount} ({simulatedSeconds:0.00}s); " +
-                    $"cached meshes {_meshLibrary.Count}.");
+                    $"cached meshes {_meshLibrary.Count}; models {_modelFactory.Count}.");
 
                 if (_screenshotPath != null)
                 {
@@ -152,36 +158,56 @@ public sealed class VectorFrontGame : Game
     }
 
     /// <summary>
-    /// Temporary fixed scene used to validate the 3D pipeline. Replaced by the world renderer
-    /// and RTS camera in later tasks.
+    /// Temporary model gallery used to validate silhouettes and palettes. Replaced by the world
+    /// renderer once entities exist (T-009).
     /// </summary>
-    private void CreateReferenceScene()
+    private void CreateModelGallery()
     {
         _sceneRenderer = new SceneRenderer(GraphicsDevice);
         _meshLibrary = new MeshLibrary(GraphicsDevice);
+        _modelFactory = new ModelFactory(_meshLibrary);
 
         _camera = new CameraView(MathHelper.PiOver4, 0.5f, 500f);
         _camera.SetViewport(
             GraphicsDevice.PresentationParameters.BackBufferWidth,
             GraphicsDevice.PresentationParameters.BackBufferHeight);
-        _camera.LookAt(new Vector3(38f, 32f, 38f), new Vector3(0f, 1f, 0f));
+        _camera.LookAt(new Vector3(24f, 32f, 36f), new Vector3(0f, 2f, -1f));
 
         _groundMesh = _meshLibrary.GetPlane(new Vector2(120f, 120f));
-        _boxMesh = _meshLibrary.GetBox(new Vector3(2f, 2f, 2f));
+        _sceneObjects.Add(new SceneObject(_groundMesh, Matrix.Identity, new Color(28, 34, 48)));
 
-        _sceneObjects.Add(new SceneObject(_groundMesh, Matrix.Identity, new Color(30, 38, 56)));
-        _sceneObjects.Add(new SceneObject(
-            _boxMesh,
-            Matrix.CreateTranslation(0f, 1f, 0f),
-            new Color(82, 203, 255)));
-        _sceneObjects.Add(new SceneObject(
-            _boxMesh,
-            Matrix.CreateScale(1.5f) * Matrix.CreateTranslation(-9f, 1.5f, 7f),
-            new Color(222, 92, 236)));
-        _sceneObjects.Add(new SceneObject(
-            _boxMesh,
-            Matrix.CreateScale(0.75f) * Matrix.CreateTranslation(11f, 0.75f, -5f),
-            new Color(92, 240, 172)));
+        var concord = FactionPaletteId.Concord;
+        var nullFaction = FactionPaletteId.Null;
+
+        // Buildings, Concord.
+        AddGalleryModel(ModelId.Nexus, concord, -24f, -14f);
+        AddGalleryModel(ModelId.Reactor, concord, -12f, -14f);
+        AddGalleryModel(ModelId.Fabricator, concord, 0f, -14f);
+        AddGalleryModel(ModelId.Foundry, concord, 12f, -14f);
+        AddGalleryModel(ModelId.Turret, concord, 24f, -14f);
+
+        // Units, both palettes.
+        AddGalleryModel(ModelId.Harvester, concord, -18f, -2f);
+        AddGalleryModel(ModelId.Scout, concord, -6f, -2f);
+        AddGalleryModel(ModelId.Striker, concord, 6f, -2f);
+        AddGalleryModel(ModelId.Lancer, concord, 18f, -2f);
+
+        AddGalleryModel(ModelId.Harvester, nullFaction, -18f, 7f);
+        AddGalleryModel(ModelId.Scout, nullFaction, -6f, 7f);
+        AddGalleryModel(ModelId.Striker, nullFaction, 6f, 7f);
+        AddGalleryModel(ModelId.Lancer, nullFaction, 18f, 7f);
+
+        // Props.
+        AddGalleryModel(ModelId.AlloyNode, FactionPaletteId.Neutral, -28f, 11f);
+        AddGalleryModel(ModelId.Projectile, concord, 22f, 11f, y: 1.6f);
+        AddGalleryModel(ModelId.Debris, nullFaction, 25f, 4f);
+    }
+
+    private void AddGalleryModel(ModelId id, FactionPaletteId palette, float x, float z, float y = 0f)
+    {
+        _gallery.Add(new GalleryItem(
+            _modelFactory.Get(id, palette),
+            Matrix.CreateTranslation(x, y, z)));
     }
 
     /// <summary>
@@ -260,4 +286,6 @@ public sealed class VectorFrontGame : Game
     }
 
     private readonly record struct SceneObject(DrMesh Mesh, Matrix World, Color Color);
+
+    private readonly record struct GalleryItem(DrModel Model, Matrix World);
 }

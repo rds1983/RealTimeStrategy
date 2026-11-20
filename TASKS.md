@@ -45,10 +45,10 @@ Goal: a window with a lit 3D scene, a working camera and a testable build.
 
 - [x] **T-004 — Procedural mesh library**
   - `MeshLibrary` wrapping `MeshPrimitives` with a parameter-based cache (box, cylinder, sphere, cone, capsule, torus, disc, plane).
-  - Dispose GPU resources on shutdown; replace the direct `MeshPrimitives` calls in `VectorFrontGame.CreateReferenceScene` with cached lookups.
+  - Dispose GPU resources on shutdown; replace the direct `MeshPrimitives` calls in the model gallery with cached lookups.
   - Acceptance: repeated requests share one buffer; unit tests for cache keys and disposal; no leak after restart.
 
-- [ ] **T-005 — Model factory and palette**
+- [x] **T-005 — Model factory and palette**
   - `ModelFactory` assembles named models from primitive parts with local transforms and materials (Harvester, Scout, Striker, Lancer, Nexus, Reactor, Fabricator, Foundry, Turret, alloy node, projectile, debris); parts reference cached `MeshLibrary` meshes and never own them; dimensions start as local constants and are bound to definitions in T-008.
   - Faction palettes (Concord cyan / Null magenta) with emissive accents.
   - Acceptance: every model is visible, distinguishable at default zoom, and documented in `Design/GameDesign.md` if silhouettes change.
@@ -78,6 +78,7 @@ Goal: deterministic headless world with movement and orders.
 - [ ] **T-009 — World, entities and players**
   - `World` with seeded RNG, `PlayerState` (alloy, energy, supply, ids), `Entity` list + lookup, spawn/despawn, deferred removal, `Step(dt)`.
   - Commands queue applied at tick start; world snapshot/checksum helper for tests.
+  - Entity rendering: each entity holds its cached `DrModel` and palette; the renderer submits `DrModel` at the interpolated entity transform.
   - Add the entity count to the debug overlay panel (T-002).
   - Acceptance: spawn/despawn/checksum tests; same seed + commands = identical checksum.
 
@@ -235,7 +236,7 @@ Goal: a complete, understandable interface.
 
 - [ ] **T-040 — Pause and end screens**
   - Pause overlay, victory/defeat screen with match time and unit summary, restart button, keyboard shortcuts.
-  - Acceptance: simulation frozen while paused; restart fully resets world, camera and UI; Esc does not quit mid-match without confirmation; restart recreates/reuses GPU resources without leaking meshes.
+  - Acceptance: simulation frozen while paused; restart fully resets world, camera and UI; Esc does not quit mid-match without confirmation; restart safely recreates/reuses GPU resources (mesh library + cached DrModels share buffers — no double-dispose or dangling buffers).
 
 ---
 
@@ -305,3 +306,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-002 | Application shell and fixed-step loop | 2026-11-20 | 3801db7 |
 | T-003 | 3D rendering foundation | 2026-11-20 | 673c8ad |
 | T-004 | Procedural mesh library | 2026-11-20 | c6a4323 |
+| T-005 | Model factory and palette | 2026-11-20 | _pending_ |

@@ -41,11 +41,14 @@ RealTimeStrategy/
     Math/                        fixed math helpers, geometry queries
   Presentation/                  rendering, input, UI and platform glue
     Content/AssetPaths.cs        resolves runtime Myra asset root
-    Rendering/                   renderer, effects, debug overlay host
+    Rendering/                   renderer, models and debug overlay host
       SceneRenderer.cs           draw list, culling, BasicEffect
       MeshLibrary.cs             device-backed procedural primitive cache
       MeshKey.cs                 value key for cached shapes
       MeshCache.cs               keyed cache + disposal (unit tested)
+      ModelFactory.cs            builds cached DrModel hierarchies per (id, palette)
+      ModelId.cs                 unit/structure/prop identifiers
+      FactionPalettes.cs         Concord / Null / Neutral colors
     Ui/                          Myra markup, generated panels, HUD binding, screens
       DebugOverlay.xmmp          design-time markup (not shipped, not loaded at runtime)
       DebugOverlayPanel.cs       hand-written runtime behavior (kept by the exporter)
@@ -146,17 +149,20 @@ Later passes add the textured/grid ground (T-007), blob shadows, units/structure
 ### Renderer details
 
 - **Coordinates:** right-handed (`Matrix.CreateLookAt` + `CreatePerspectiveFieldOfView`), default `toLeftHanded: false` DigitalRiseModel primitives, `CullMode.CullCounterClockwiseFace`.
-- **Lens:** 45° vertical FOV, near 0.5, far 500. The current reference camera is fixed at `(38, 32, 38)` looking at `(0, 1, 0)`; `RtsCamera` (T-006) will drive the same `CameraView`.
+- **Lens:** 45° vertical FOV, near 0.5, far 500. The gallery camera is currently at `(24, 32, 36)` looking at `(0, 2, -1)`; `RtsCamera` (T-006) will drive the same `CameraView`.
 - **Lighting:** `BasicEffect` with per-pixel lighting, ambient `0.42`, one directional light (`0.78`, direction `(-0.45, -1, -0.35)`), specular `0.08` / power 24. No textures yet.
-- **Draw list:** `SceneRenderer` keeps a preallocated `List<MeshDrawCommand>` of `(DrMesh, world matrix, diffuse color)`; no per-frame allocation once the list capacity is reached. `SubmittedCount` / `CulledCount` / `DrawnCount` are exposed for debugging.
-- **Reference scene:** `VectorFrontGame.CreateReferenceScene` builds a 120 × 120 ground plane and three boxes (2 × 2 × 2, two scaled) to validate winding, normals, depth and lighting. Both meshes come from the shared `MeshLibrary`, so four scene objects use two cached meshes. It is temporary and is replaced once the world supplies entities.
+- **Draw list:** `SceneRenderer` keeps a preallocated `List<MeshDrawCommand>` of `(DrMeshPart, world matrix, diffuse, emissive)`; no per-frame allocation once the list capacity is reached. `SubmittedCount` / `CulledCount` / `DrawnCount` are exposed for debugging.
+- **Model gallery:** `VectorFrontGame.CreateModelGallery` lays out every MVP model: five Concord structures, four units in each faction palette, an alloy node, a projectile and debris, on the 120 × 120 ground plane. It exists only to validate silhouettes/palettes and is replaced once the world supplies entities. The gallery currently uses 90 cached meshes for 16 `DrModel` instances and ~90 draw calls.
+- **Materials:** `ModelFactory` creates three `DrMaterial`s per model (chassis, panel, accent). The accent uses a dark diffuse base (35 % of the accent) plus the full accent as emissive, so energy details stay colored instead of clipping to white.
 
 ### Mesh and model pipeline
 
 - `MeshLibrary` (T-004) wraps `MeshPrimitives` and caches meshes by `MeshKey` (kind, dimensions, tessellation, UV scales, handedness, plane normal/back-face, cylinder cap). `MeshCache` owns the dictionary and disposal and is unit tested through an injected factory; `MeshLibrary` maps typed calls to keys and invokes the primitives.
 - The public API mirrors DigitalRiseModel's actual parameter names: cylinder `height`/`radius`/`capped`, cone `radius`/`height`, capsule `length`/`radius`, disc `radius`/`sectorAngle`; planes default to `NormalDirection.UpY` because RTS ground is horizontal. Look at the package source, not the README, when adding a shape.
-- `MeshLibrary.Count` is logged by the smoke test (currently 2: ground plane + box) and confirms that identical requests share one mesh.
-- `ModelFactory` (T-005) assembles named models from parts, e.g. `Striker = torso box + 2 leg cylinders + cockpit sphere + gun barrel cylinder`. Each part has a mesh key, local transform and material id. Models are built once at startup.
+- `MeshLibrary.Count` is logged by the smoke test (currently 90 unique primitive meshes for the gallery) and confirms that identical requests share one mesh.
+- `ModelFactory` (T-005) builds a `DrModel` per `(ModelId, FactionPaletteId)`: one `DrModelBone` per part, each carrying a `DrMesh` with a single `DrMeshPart` cloned from the cached primitive and a `DefaultPose` (`SrtTransform`) for its local transform. `SceneRenderer.Submit(DrModel, world)` calls `CopyAbsoluteBoneTransformsTo` and draws each mesh at `absoluteBone * world`, reading diffuse/emissive from the part's `DrMaterial`. No parallel model/material/part types are used.
+- **Ownership:** cloned parts share vertex/index buffers with the `MeshLibrary` templates. The library owns and disposes the GPU buffers; model objects are cached for the app lifetime and must not be disposed individually while the library is alive.
+- Trap: `BasicEffect.EmissiveColor` adds directly to the lit result. Bright diffuse + bright emissive clips to white; emissive materials therefore use a dark diffuse base (see the accent `DrMaterial` in `ModelFactory`).
 - `DrMesh`/`DrMeshPart` are drawn manually: set `BasicEffect.World/View/Projection`, `DiffuseColor`, then `GraphicsDevice.DrawIndexedPrimitives`.
 - Materials are simple: chassis diffuse color, ambient/directional light, no textures except the ground grid and UI. Emissive accents plus additive glow discs provide the sci-fi look without custom shaders.
 - Shadows are fake (blob discs, T-007). Real shadow mapping and bloom are post-prototype.
@@ -221,6 +227,7 @@ Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count 
 - **Timing tests:** `SimulationClock` covers 20 Hz accumulation across 60/20 FPS frame patterns, partial ticks and alpha, invalid elapsed input, and the 5-step catch-up clamp (excess time dropped, not banked).
 - **Rendering math:** `CameraView` tests cover frustum visibility (origin, behind camera, outside FOV, beyond far plane, near-plane intersection), world-matrix bounds culling, `LookAt` changes, aspect/projection and invalid input.
 - **Mesh cache:** equal keys reuse one mesh, different keys create separate meshes, disposal releases every cached mesh exactly once, access after dispose throws, and the key includes every shape parameter with neutral defaults.
+- **Model gallery (manual):** every `ModelId` appears with a distinct silhouette and correct palette; accents stay colored (not white); smoke output reports mesh/model counts (`90` meshes / `16` models at the time of writing).
 - **Manual smoke checklist** for rendering/UI tasks: window opens, camera pans/zooms, models visible with correct colors, no exceptions in log, 60 FPS.
 - **Smoke test:** `dotnet run --project RealTimeStrategy -- --smoke-test 30` creates the window/graphics device, renders 30 frames and exits with code 0. Add `--overlay` to force the debug overlay visible and exercise the Myra/font path. Add `--screenshot <path.png>` to save the backbuffer of the final frame — use this for visual checks instead of OS window capture.
 - Tests must be fast (< 10 s total) and must not require a display.
@@ -236,7 +243,7 @@ Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count 
 | MonoGame runtime shader compilation | Use `BasicEffect` only for the MVP; precompile shaders if added later. |
 | Floating-point drift across platforms | Determinism only asserted on the same machine/architecture; no cross-platform lockstep requirement. |
 | Scope creep (tech tree, fog, campaign) | MVP scope in `GameDesign.md`; new features go to `TASKS.md` only with developer approval. |
-| Per-unit draw calls at 300 units | Shared mesh cache, batching by mesh/material; instancing is an optional optimization task if profiling demands it. |
+| Per-unit draw calls at 300 units | Shared mesh cache; models currently use 8–20 parts each, so 300 units would far exceed the 400 draw-call budget. T-048 must batch by mesh/material or merge static parts into combined meshes before the perf target is enforced. |
 
 ---
 

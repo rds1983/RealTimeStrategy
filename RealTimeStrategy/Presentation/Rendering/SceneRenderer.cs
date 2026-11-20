@@ -6,8 +6,8 @@ using RealTimeStrategy.Presentation.Camera;
 namespace RealTimeStrategy.Presentation.Rendering;
 
 /// <summary>
-/// Immediate-mode 3D renderer for procedurally generated meshes. Callers submit a draw list,
-/// then render it with frustum culling against a <see cref="CameraView"/>.
+/// Immediate-mode 3D renderer for DigitalRiseModel meshes and models. Callers submit a draw
+/// list, then render it with frustum culling against a <see cref="CameraView"/>.
 /// </summary>
 public sealed class SceneRenderer : IDisposable
 {
@@ -15,6 +15,7 @@ public sealed class SceneRenderer : IDisposable
     private readonly BasicEffect _effect;
     private readonly RasterizerState _rasterizerState;
     private readonly List<MeshDrawCommand> _commands = new(256);
+    private readonly Dictionary<DrModel, Matrix[]> _boneTransforms = new();
 
     private CameraView? _camera;
 
@@ -64,8 +65,58 @@ public sealed class SceneRenderer : IDisposable
 
     public void Submit(DrMesh mesh, Matrix world, Color diffuseColor)
     {
-        _commands.Add(new MeshDrawCommand(mesh, world, diffuseColor));
+        Submit(mesh, world, diffuseColor, Color.Black);
+    }
+
+    public void Submit(DrMesh mesh, Matrix world, Color diffuseColor, Color emissiveColor)
+    {
+        foreach (var part in mesh.MeshParts)
+        {
+            Submit(part, world, diffuseColor, emissiveColor);
+        }
+    }
+
+    /// <summary>Submits one mesh part using its <see cref="DrMaterial"/> colors.</summary>
+    public void Submit(DrMeshPart part, Matrix world)
+    {
+        var material = part.Material;
+        Submit(
+            part,
+            world,
+            material?.DiffuseColor ?? Color.White,
+            material?.EmissiveColor ?? Color.Black);
+    }
+
+    public void Submit(DrMeshPart part, Matrix world, Color diffuseColor, Color emissiveColor)
+    {
+        _commands.Add(new MeshDrawCommand(part, world, diffuseColor, emissiveColor));
         SubmittedCount++;
+    }
+
+    /// <summary>
+    /// Submits a <see cref="DrModel"/>: computes absolute bone transforms once and uses each
+    /// mesh's parent bone to place it.
+    /// </summary>
+    public void Submit(DrModel model, Matrix world)
+    {
+        if (!_boneTransforms.TryGetValue(model, out var boneTransforms))
+        {
+            boneTransforms = new Matrix[model.Bones.Length];
+            _boneTransforms.Add(model, boneTransforms);
+        }
+
+        model.CopyAbsoluteBoneTransformsTo(boneTransforms);
+
+        foreach (var mesh in model.Meshes)
+        {
+            var parentBone = mesh.ParentBone;
+            var meshWorld = parentBone is null ? world : boneTransforms[parentBone.Index] * world;
+
+            foreach (var part in mesh.MeshParts)
+            {
+                Submit(part, meshWorld);
+            }
+        }
     }
 
     public void Render()
@@ -84,7 +135,8 @@ public sealed class SceneRenderer : IDisposable
 
         foreach (var command in _commands)
         {
-            if (!_camera.IsVisible(command.Mesh.BoundingBox, command.World))
+            var part = command.Part;
+            if (!_camera.IsVisible(part.BoundingBox, command.World))
             {
                 CulledCount++;
                 continue;
@@ -92,25 +144,23 @@ public sealed class SceneRenderer : IDisposable
 
             _effect.World = command.World;
             _effect.DiffuseColor = command.DiffuseColor.ToVector3();
+            _effect.EmissiveColor = command.EmissiveColor.ToVector3();
             _effect.CurrentTechnique.Passes[0].Apply();
 
-            foreach (var part in command.Mesh.MeshParts)
-            {
-                _device.SetVertexBuffer(part.VertexBuffer);
+            _device.SetVertexBuffer(part.VertexBuffer);
 
-                if (part.IndexBuffer is not null)
-                {
-                    _device.Indices = part.IndexBuffer;
-                    _device.DrawIndexedPrimitives(
-                        part.PrimitiveType,
-                        part.VertexOffset,
-                        part.StartIndex,
-                        part.PrimitiveCount);
-                }
-                else
-                {
-                    _device.DrawPrimitives(part.PrimitiveType, part.VertexOffset, part.PrimitiveCount);
-                }
+            if (part.IndexBuffer is not null)
+            {
+                _device.Indices = part.IndexBuffer;
+                _device.DrawIndexedPrimitives(
+                    part.PrimitiveType,
+                    part.VertexOffset,
+                    part.StartIndex,
+                    part.PrimitiveCount);
+            }
+            else
+            {
+                _device.DrawPrimitives(part.PrimitiveType, part.VertexOffset, part.PrimitiveCount);
             }
 
             DrawnCount++;
@@ -121,7 +171,12 @@ public sealed class SceneRenderer : IDisposable
     {
         _effect.Dispose();
         _rasterizerState.Dispose();
+        _boneTransforms.Clear();
     }
 
-    private readonly record struct MeshDrawCommand(DrMesh Mesh, Matrix World, Color DiffuseColor);
+    private readonly record struct MeshDrawCommand(
+        DrMeshPart Part,
+        Matrix World,
+        Color DiffuseColor,
+        Color EmissiveColor);
 }
