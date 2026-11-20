@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using RealTimeStrategy.Core.Definitions;
+using RealTimeStrategy.Core.Navigation;
 
 namespace RealTimeStrategy.Core.World;
 
@@ -40,6 +41,9 @@ public sealed class World
 
     /// <summary>Proximity index rebuilt at the end of every <see cref="Step"/>.</summary>
     public SpatialGrid Spatial { get; }
+
+    /// <summary>Structure passability grid; updated as buildings spawn and are removed.</summary>
+    public NavGrid Navigation { get; } = new();
 
     public long TickCount { get; private set; }
 
@@ -82,6 +86,7 @@ public sealed class World
 
         AddEntity(entity);
         GetPlayer(owner).AddSupplyCap(def.SupplyProvided);
+        SetBuildingFootprint(def, entity.Position, blocked: true);
         return entity;
     }
 
@@ -228,6 +233,7 @@ public sealed class World
             else
             {
                 player.AddSupplyCap(-entity.BuildingDef!.SupplyProvided);
+                SetBuildingFootprint(entity.BuildingDef, entity.Position, blocked: false);
             }
         }
     }
@@ -239,6 +245,18 @@ public sealed class World
         player.Energy,
         player.SupplyUsed,
         player.SupplyCap);
+
+    private void SetBuildingFootprint(BuildingDef def, Vector3 position, bool blocked)
+    {
+        var halfWidth = def.Footprint.Width * MapGrid.CellSize * 0.5f;
+        var halfHeight = def.Footprint.Height * MapGrid.CellSize * 0.5f;
+        var minCell = MapGrid.WorldToCell(new Vector3(
+            position.X - halfWidth,
+            0f,
+            position.Z - halfHeight));
+
+        Navigation.SetFootprint(minCell, def.Footprint.Width, def.Footprint.Height, blocked);
+    }
 
     private static Vector3 ClampToMap(Vector3 position) => new(
         Math.Clamp(position.X, -MapGrid.HalfSize, MapGrid.HalfSize),

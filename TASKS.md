@@ -87,12 +87,12 @@ Goal: deterministic headless world with movement and orders.
   - APIs for radius query, nearest enemy, neighbors for separation.
   - Acceptance: results match brute force on randomized cases; 300-unit query benchmark stays under budget.
 
-- [ ] **T-011 — Navigation grid and A***
+- [x] **T-011 — Navigation grid and A***
   - `NavGrid` (60 × 60 cells, same 2-unit `MapGrid` cells but separate from `SpatialGrid`), blockers from structures/nodes/map edges, 8-way A* without corner cutting, line-of-sight path smoothing.
   - Acceptance: path found/blocked cases, no diagonal wall clipping, path length ≤ 1.3× optimal on test maps.
 
 - [ ] **T-012 — Movement and steering**
-  - Waypoint following, acceleration/deceleration, separation via `World.Spatial` neighbor queries, stuck detection and repath, facing/rotation toward velocity.
+  - Waypoint following with world paths from `PathFinder`, acceleration/deceleration, separation via `World.Spatial` neighbor queries, stuck detection and repath, facing/rotation toward velocity.
   - Acceptance: units reach destinations within tolerance, do not pile on one point, recover from blocked paths in tests.
 
 - [ ] **T-013 — Orders and command queue**
@@ -128,7 +128,7 @@ Goal: the player can select and command units with the mouse.
 Goal: harvesting loop that the player can see and interrupt.
 
 - [ ] **T-018 — Alloy nodes and harvesting**
-  - Alloy node entities with reserves (add a `ResourceNode` kind to the world entity model), harvester state machine (seek → harvest → return → deposit), carry capacity, timings from the design doc.
+  - Alloy node entities with reserves (add a `ResourceNode` kind to the world entity model); nodes block their `NavGrid` cells, harvester state machine (seek → harvest → return → deposit), carry capacity, timings from the design doc.
   - Acceptance: one Harvester produces the documented rate ±5 % in simulation; tests for full/empty cargo, dead node, blocked path.
 
 - [ ] **T-019 — Resources, deposits and supply**
@@ -151,7 +151,7 @@ Goal: place structures, build an army, expand production.
 
 - [ ] **T-022 — Placement mode and ghost preview**
   - Footprint snapping to `MapGrid` 2-unit cells using `BuildingDef.Footprint`, build-radius check, overlap/blocker check, ghost tint, rotation-free placement, cancel; temporary debug hotkey enters placement mode.
-  - Acceptance: validity matches the nav grid exactly; test matrix for overlap, radius, nodes, map edge; ghost never blocks input after cancel.
+  - Acceptance: validity uses `World.Navigation` cells and footprint rules exactly; test matrix for overlap, radius, nodes, map edge; ghost never blocks input after cancel.
 
 - [ ] **T-023 — Construction progress, cancel and refund**
   - Cost charged on confirm, progress over build time, 50 % refund on cancel, completion swaps to the active model, destruction removes footprint.
@@ -312,3 +312,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-008 | Definitions and balance data | 2026-11-20 | b4cdaae |
 | T-009 | World, entities and players | 2026-11-20 | 6130721 |
 | T-010 | Spatial grid and queries | 2026-11-20 | 0ce671d |
+| T-011 | Navigation grid and A* | 2026-11-20 | _pending_ |

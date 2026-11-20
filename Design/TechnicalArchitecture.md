@@ -33,7 +33,7 @@ RealTimeStrategy/
     World/                       World, Entity, PlayerState, EntityId, SpatialGrid,
                                  command records, snapshots + checksum (unit tested)
     Orders/                      Order types, OrderQueue, order execution
-    Navigation/                  NavGrid, AStar, Path, flow helpers
+    Navigation/                 NavGrid, PathFinder (8-way A*, LOS smoothing, unit tested)
     Movement/                    locomotion, separation, path following
     Combat/                      weapons, targeting, projectiles, damage
     Economy/                     resources, harvesting, supply, construction
@@ -137,11 +137,12 @@ The game project is an `Exe` (console attached) during development so logs and c
 
 ### Navigation and movement
 
-- `NavGrid` over the 120 × 120 map with 2 × 2 unit cells (60 × 60 cells); structures and blockers mark cells impassable.
-- A* on the grid, 8-directional with corner cutting disallowed; paths are simplified with line-of-sight string pulling.
-- Units follow waypoints with steering: desired velocity, max acceleration, separation from neighbors, and a stuck timer that repaths or stops.
-- Unit-to-unit collision is soft (separation forces); buildings block movement via the nav grid.
-- Flow-field or crowd pathfinding is out of scope; the expected unit count (≤ 300) does not need it.
+- `NavGrid` (T-011) is a passability grid over the same 120 × 120 map/2-unit cells (60 × 60), separate from the spatial hash. `World.Navigation` blocks/unblocks building footprints as structures spawn and are removed; resource nodes will do the same in T-018. Map edges are implicit blockers.
+- `PathFinder` runs 8-way A* with an octile heuristic, reusable score/state arrays and a `PriorityQueue`. Diagonal steps require both adjacent orthogonal cells to be passable, so units cannot clip wall corners.
+- Paths are simplified with `NavGrid.HasLineOfSight` (Bresenham + orthogonal corner checks); every simplified segment is collision-free. The world-space overload returns cell centers and includes the start cell.
+- Randomized tests compare path cost against a reference Dijkstra and require ≤ 1.3× optimal; walls, blocked goals, corner traps and smoothing are covered.
+- Units follow waypoints with steering in T-012: desired velocity, acceleration, separation via `World.Spatial`, and a stuck timer that repaths or stops.
+- Unit-to-unit collision is soft (separation forces); buildings block movement via the nav grid. Flow-field/crowd pathfinding is out of scope for ≤ 300 units.
 
 ### Orders
 
@@ -259,6 +260,7 @@ Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count 
 - **Headless world tests:** `new World(registry, seed)`, enqueue commands, `Step(0.05f)` N times, assert state. No graphics, no clock.
 - **World:** spawn commands apply at tick start, id lookup and map clamping, supply used/cap updates and release on removal, despawn/lethal damage deferred to tick end, unknown targets ignored, resource/tick-sensitive FNV checksums, immutable snapshots, and seeded RNG reproducibility.
 - **Spatial grid:** randomized radius queries match brute force, nearest-enemy ignores allies and range, rebuild drops despawned entities, span queries report total matches even with a small buffer, map-edge queries stay in bounds, and 1,000 radius queries over 300 units complete in ~4 ms (budget 200 ms in the test).
+- **Navigation:** nav-grid blocking/count/footprints and line-of-sight (including diagonal corner rejection); A* straights, diagonals, walls, blocked endpoints, corner traps, smoothing, world-space output, and building footprints blocking/unblocking in `World.Navigation`; 25 random obstacle maps compare path cost against reference Dijkstra within 1.3×.
 - **Determinism test:** run the same seed + command script twice and compare a world checksum/snapshot.
 - **Timing tests:** `SimulationClock` covers 20 Hz accumulation across 60/20 FPS frame patterns, partial ticks and alpha, invalid elapsed input, and the 5-step catch-up clamp (excess time dropped, not banked).
 - **Rendering math:** `CameraView` tests cover frustum visibility (origin, behind camera, outside FOV, beyond far plane, near-plane intersection), world-matrix bounds culling, `LookAt` changes, aspect/projection and invalid input.
