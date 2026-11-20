@@ -46,6 +46,7 @@ public sealed class VectorFrontGame : Game
     private Texture2D _buildGridTexture = null!;
     private readonly List<SceneObject> _sceneObjects = new();
     private readonly SelectionModel _selection = new();
+    private readonly OrderController _orderController;
     private SpriteBatch _overlayBatch = null!;
     private Texture2D _overlayPixel = null!;
     private bool _boxSelecting;
@@ -53,6 +54,7 @@ public sealed class VectorFrontGame : Game
     private Point _boxEnd;
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
+    private MouseCursor? _currentCursor;
     private int _previousScrollValue;
     private bool _showBuildGrid;
     private Entity? _hoveredEntity;
@@ -79,6 +81,7 @@ public sealed class VectorFrontGame : Game
         _selectAllOnStart = args?.Contains("--select-all") == true;
         _showBuildGrid = args?.Contains("--build-grid") == true;
         _screenshotPath = ParseOptionValue(args, "--screenshot");
+        _orderController = new OrderController(_selection);
         _wallClock.Start();
     }
 
@@ -130,7 +133,25 @@ public sealed class VectorFrontGame : Game
 
         if (keyboard.IsKeyDown(Keys.Escape))
         {
-            Exit();
+            if (WasPressed(keyboard, Keys.Escape))
+            {
+                if (_orderController.AttackMoveArmed)
+                {
+                    _orderController.CancelAttackMove();
+                }
+                else if (_boxSelecting)
+                {
+                    _boxSelecting = false;
+                }
+                else if (_selection.Count > 0)
+                {
+                    _selection.Clear();
+                }
+                else
+                {
+                    Exit();
+                }
+            }
         }
 
         var elapsedSeconds = gameTime.ElapsedGameTime.TotalSeconds;
@@ -144,9 +165,11 @@ public sealed class VectorFrontGame : Game
         {
             var mouse = Mouse.GetState();
             _selection.Prune(_world);
+            HandleOrderInput(keyboard, mouse);
             HandleSelectionInput(keyboard, mouse);
             UpdateCamera(keyboard, elapsedSeconds, mouse);
             UpdateHover(mouse);
+            UpdateCursor(mouse);
         }
         else
         {
@@ -387,6 +410,70 @@ public sealed class VectorFrontGame : Game
             color));
     }
 
+    private void HandleOrderInput(KeyboardState keyboard, MouseState mouse)
+    {
+        if (!IsActive)
+        {
+            return;
+        }
+
+        var viewport = GraphicsDevice.Viewport;
+        var inside =
+            viewport.Bounds.Contains(mouse.Position) &&
+            !_gameUi.IsPointerOverHud(mouse.Position);
+        var shift = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift);
+
+        if (WasPressed(keyboard, Keys.A))
+        {
+            if (_orderController.AttackMoveArmed)
+            {
+                _orderController.CancelAttackMove();
+            }
+            else
+            {
+                _orderController.ArmAttackMove();
+            }
+        }
+
+        if (WasPressed(keyboard, Keys.S))
+        {
+            _orderController.CancelAttackMove();
+            _orderController.IssueStop(_world);
+        }
+
+        if (WasPressed(keyboard, Keys.H))
+        {
+            _orderController.CancelAttackMove();
+            _orderController.IssueHold(_world);
+        }
+
+        var rightDown = mouse.RightButton == ButtonState.Pressed;
+        var rightWasDown = _previousMouse.RightButton == ButtonState.Pressed;
+
+        if (rightDown && !rightWasDown && inside)
+        {
+            _orderController.CancelAttackMove();
+
+            var target = Picking.PickEntity(
+                _world,
+                _camera,
+                mouse.Position,
+                viewport.Width,
+                viewport.Height);
+
+            Vector3? groundPoint = Picking.TryGetGroundPoint(
+                _camera,
+                mouse.Position,
+                viewport.Width,
+                viewport.Height,
+                out var ground)
+                ? ground
+                : null;
+
+            _orderController.IssueContext(_world, target, groundPoint, queue: shift);
+        }
+    }
+
     private void HandleSelectionInput(KeyboardState keyboard, MouseState mouse)
     {
         if (!IsActive)
@@ -416,28 +503,47 @@ public sealed class VectorFrontGame : Game
         else if (!leftDown && leftWasDown && _boxSelecting)
         {
             _boxSelecting = false;
-            var rectangle = NormalizeRectangle(_boxStart, _boxEnd);
 
-            if (rectangle.Width < 5 && rectangle.Height < 5)
+            if (_orderController.AttackMoveArmed)
             {
-                _selection.Select(
-                    Picking.PickEntity(
-                        _world,
+                if (inside &&
+                    Picking.TryGetGroundPoint(
                         _camera,
                         mouse.Position,
                         viewport.Width,
-                        viewport.Height),
-                    additive);
+                        viewport.Height,
+                        out var point))
+                {
+                    _orderController.IssueAttackMove(_world, point, queue: additive);
+                }
+
+                _orderController.CancelAttackMove();
             }
             else
             {
-                _selection.SelectRectangle(
-                    _world,
-                    _camera,
-                    rectangle,
-                    viewport.Width,
-                    viewport.Height,
-                    additive);
+                var rectangle = NormalizeRectangle(_boxStart, _boxEnd);
+
+                if (rectangle.Width < 5 && rectangle.Height < 5)
+                {
+                    _selection.Select(
+                        Picking.PickEntity(
+                            _world,
+                            _camera,
+                            mouse.Position,
+                            viewport.Width,
+                            viewport.Height),
+                        additive);
+                }
+                else
+                {
+                    _selection.SelectRectangle(
+                        _world,
+                        _camera,
+                        rectangle,
+                        viewport.Width,
+                        viewport.Height,
+                        additive);
+                }
             }
         }
 
@@ -620,6 +726,40 @@ public sealed class VectorFrontGame : Game
             mouse.Position,
             viewport.Width,
             viewport.Height);
+    }
+
+    private void UpdateCursor(MouseState mouse)
+    {
+        var viewport = GraphicsDevice.Viewport;
+        var overHud =
+            !viewport.Bounds.Contains(mouse.Position) ||
+            _gameUi.IsPointerOverHud(mouse.Position);
+
+        MouseCursor desired;
+
+        if (!IsActive || overHud)
+        {
+            desired = MouseCursor.Arrow;
+        }
+        else if (_orderController.AttackMoveArmed)
+        {
+            desired = MouseCursor.Crosshair;
+        }
+        else
+        {
+            var primary = _selection.Primary(_world);
+            desired = primary is { Kind: EntityKind.Unit } &&
+                      _hoveredEntity is { IsAlive: true } hovered &&
+                      hovered.Owner != primary.Owner
+                ? MouseCursor.Crosshair
+                : MouseCursor.Arrow;
+        }
+
+        if (!ReferenceEquals(_currentCursor, desired))
+        {
+            Mouse.SetCursor(desired);
+            _currentCursor = desired;
+        }
     }
 
     private void StepSimulation(float deltaSeconds)

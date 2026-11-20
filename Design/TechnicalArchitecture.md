@@ -59,7 +59,7 @@ RealTimeStrategy/
       DebugOverlay.xmmp          debug stats markup (not shipped, not loaded at runtime)
       DebugOverlayPanel.cs       hand-written runtime behavior (kept by the exporter)
       DebugOverlayPanel.Generated.cs  myra-export output (never edit by hand)
-    Input/                       input state, picking, SelectionModel, command controller
+    Input/                       input state, picking, SelectionModel, OrderController
     Camera/CameraView.cs         view/projection matrices + frustum culling (unit tested)
     Camera/RtsCamera.cs          focus/yaw/zoom controller, map clamping, focus helpers
     Audio/                       placeholder SFX hooks
@@ -152,8 +152,15 @@ The game project is an `Exe` (console attached) during development so logs and c
 - `Order` is a readonly record (`OrderType` + point/target/building/unit) with factories for `Move`, `AttackMove`, `Attack`, `Hold`, `Stop`, `Harvest`, `ReturnCargo`, `Build`, `Produce` and `SetRally`. Only fields relevant to the type are read.
 - Each unit owns an `OrderQueue` (capacity 4, FIFO, head order executes). `replace` clears the queue and stops current movement; non-replace appends. Orders are issued through `World.TryIssueOrder` → `IssueOrderCommand`, so validation and application happen at tick start; invalid orders return false immediately.
 - `OrderExecutor` validates ownership/targets/points, starts the head order before movement, and pops completed Move/AttackMove orders after movement. Move-like orders delegate to `World.MoveUnit`; Stop/Hold clear movement and set `HoldPosition` (movement skips held units).
-- Combat/harvest/build/produce/rally order types are defined but rejected until their systems land (T-018/T-021/T-024/T-028). Attack currently validates the enemy and chases the target position; range/weapon behavior comes with targeting.
+- Combat/harvest/build/produce/rally order types are defined but rejected until their systems land (T-018/T-021/T-024/T-028). Attack validates the enemy and chases the target position; range/weapon behavior comes with targeting.
 - Queues, hold flags and current order data are included in the world checksum.
+
+### Order input
+
+- `OrderController` maps the current selection + cursor context to orders: right-click an enemy → `Attack`; right-click ground → `Move`; a selected structure + right-click ground → `SetRally` (stored on `Entity.RallyPoint` for T-024). Invalid targets/points are ignored without clearing the selection.
+- `A` arms attack-move (crosshair); the next left-click issues `AttackMove` instead of selecting. `S` stops, `H` holds; both cancel attack-move mode. Shift queues instead of replacing. `Esc` cancels attack-move, then clears selection, then exits.
+- Cursor feedback: crosshair when attack-move is armed or an enemy is hovered with units selected, arrow elsewhere/over the HUD.
+- Gameplay only reaches `World.TryIssueOrder`; the controller never mutates the world directly.
 
 ---
 
@@ -282,6 +289,7 @@ Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count 
 - **Navigation:** nav-grid blocking/count/footprints and line-of-sight (including diagonal corner rejection); A* straights, diagonals, walls, blocked endpoints, corner traps, smoothing, world-space output, and building footprints blocking/unblocking in `World.Navigation`; 25 random obstacle maps compare path cost against reference Dijkstra within 1.3×.
 - **Movement:** arrival within tolerance and stop, facing toward velocity, wall detours, mid-route blocking with successful repath, rejection of blocked destinations/buildings, stop semantics, previous-position interpolation, five-unit anti-stacking (no pair closer than 1 unit) and deterministic movement checksums.
 - **Orders:** tick-start application, queue completion, sequential queued moves, replace semantics, capacity 4, stop/hold position retention, invalid targets/points/types/buildings, dead-target rejection and mid-queue replacement.
+- **Order controller:** context move/attack/rally, attack-move arming, stop/hold, shift queueing, no-selection no-ops, structure rally persistence and a full cross-map move integration test.
 - **Picking:** ground point from a known camera, center-ray unit hit, misses, closest-unit selection, unit-over-structure priority, working at 20/45/80 zoom, off-center projection→ground round-trips, off-center entity hits, dead entities ignored, empty world, and invalid viewport rejection.
 - **Selection:** click replace, shift-add, structure-only click, unit-preferred primary, units-only box selection, empty-box clearing, dead pruning, control-group assign/recall, groups surviving deaths, empty-group clearing and invalid group rejection. Click selection was also verified live against the game window.
 - **Determinism test:** run the same seed + command script twice and compare a world checksum/snapshot.

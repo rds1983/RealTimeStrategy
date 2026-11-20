@@ -201,6 +201,7 @@ Camera: perspective, 45° field of view, pitch 55°, default yaw 45°, distance 
 | Left click | Select entity / confirm placement |
 | Left drag | Box select |
 | `Shift` + click / drag | Add to selection |
+| `Shift` + right click | Queue order instead of replacing |
 | Right click | Context order (move, attack, harvest, deposit, set rally) |
 | `A` then left click | Attack-move |
 | `S` | Stop |

@@ -13,7 +13,17 @@ public sealed class OrderExecutor
 {
     internal bool CanIssue(WorldState world, Entity entity, Order order)
     {
-        if (!entity.IsAlive || entity.Kind != EntityKind.Unit || entity.Orders is null)
+        if (!entity.IsAlive)
+        {
+            return false;
+        }
+
+        if (order.Type == OrderType.SetRally)
+        {
+            return entity.Kind == EntityKind.Building && IsValidPoint(order.Point);
+        }
+
+        if (entity.Kind != EntityKind.Unit || entity.Orders is null)
         {
             return false;
         }
@@ -29,7 +39,7 @@ public sealed class OrderExecutor
 
             OrderType.Stop or OrderType.Hold => true,
 
-            // Harvest/Build/Produce/SetRally are enabled by T-018/T-021/T-024.
+            // Harvest/Build/Produce are enabled by T-018/T-021/T-024.
             _ => false,
         };
     }
@@ -39,6 +49,12 @@ public sealed class OrderExecutor
         if (!CanIssue(world, entity, order))
         {
             return false;
+        }
+
+        if (order.Type == OrderType.SetRally)
+        {
+            entity.RallyPoint = order.Point;
+            return true;
         }
 
         switch (order.Type)

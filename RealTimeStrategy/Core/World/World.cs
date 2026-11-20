@@ -238,6 +238,17 @@ public sealed class World
 
             hash = Mix(hash, entity.HoldPosition ? 1UL : 0UL);
 
+            if (entity.RallyPoint is { } rally)
+            {
+                hash = Mix(hash, 1UL);
+                hash = Mix(hash, (ulong)BitConverter.SingleToUInt32Bits(rally.X));
+                hash = Mix(hash, (ulong)BitConverter.SingleToUInt32Bits(rally.Z));
+            }
+            else
+            {
+                hash = Mix(hash, 0UL);
+            }
+
             if (entity.Orders is { } orders)
             {
                 hash = Mix(hash, (ulong)orders.Count);

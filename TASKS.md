@@ -113,7 +113,7 @@ Goal: the player can select and command units with the mouse.
   - Click select via `Picking.PickEntity`, drag box (shift adds), structures vs. units rules, `Ctrl+1…9` assignment and recall, `Backspace` focuses the Nexus and `Space` the selection via `RtsCamera.FocusOn`.
   - Acceptance: selection tests (empty box, mixed selection, dead entities pruned); control groups survive deaths.
 
-- [ ] **T-016 — Order issuing**
+- [x] **T-016 — Order issuing**
   - Right-click context orders issued through `World.TryIssueOrder` (move, attack, harvest, deposit, rally), with world points from `Picking.TryGetGroundPoint`; `A` + click attack-move, `S` stop, `H` hold, contextual cursor feedback.
   - Acceptance: each order reaches the correct entity type (rally is stored for T-024); invalid targets ignored without deselecting; integration test drives a unit across the map.
 
@@ -128,7 +128,7 @@ Goal: the player can select and command units with the mouse.
 Goal: harvesting loop that the player can see and interrupt.
 
 - [ ] **T-018 — Alloy nodes and harvesting**
-  - Alloy node entities with reserves (add a `ResourceNode` kind to the world entity model); nodes block their `NavGrid` cells; extend `OrderExecutor` to accept `Harvest`/`ReturnCargo`; harvester state machine (seek → harvest → return → deposit), carry capacity, timings from the design doc.
+  - Alloy node entities with reserves (add a `ResourceNode` kind to the world entity model); nodes block their `NavGrid` cells; extend `OrderExecutor` to accept `Harvest`/`ReturnCargo` and `OrderController` to context-click nodes/drop-offs; harvester state machine (seek → harvest → return → deposit), carry capacity, timings from the design doc.
   - Acceptance: one Harvester produces the documented rate ±5 % in simulation; tests for full/empty cargo, dead node, blocked path.
 
 - [ ] **T-019 — Resources, deposits and supply**
@@ -158,7 +158,7 @@ Goal: place structures, build an army, expand production.
   - Acceptance: refund/cost tests, nav-grid updates on completion/destruction, no negative resources.
 
 - [ ] **T-024 — Production queues and rally points**
-  - Per-structure queues, cost/supply checks at enqueue, cancel with refund, spawn at exit point, rally move order; temporary debug hotkey queues each producible unit. Costs, build times and allowed units come from `BuildingDef` / `UnitDef` / `DefinitionRegistry`.
+  - Per-structure queues, cost/supply checks at enqueue, cancel with refund, spawn at exit point, rally move order from `Entity.RallyPoint`; temporary debug hotkey queues each producible unit. Costs, build times and allowed units come from `BuildingDef` / `UnitDef` / `DefinitionRegistry`.
   - Acceptance: queue order, blocking on supply, refund on cancel, rally point applied to newly spawned units; tests.
 
 - [ ] **T-025 — Temporary command bridge**
@@ -317,3 +317,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-013 | Orders and command queue | 2026-11-20 | 1d3f056 |
 | T-014 | Picking and hover | 2026-11-20 | 21b9a9d |
 | T-015 | Selection and control groups | 2026-11-20 | 5e3c909 |
+| T-016 | Order issuing | 2026-11-20 | _pending_ |

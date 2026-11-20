@@ -91,6 +91,8 @@ public sealed class Entity
 
     public bool HoldPosition { get; internal set; }
 
+    public Vector3? RallyPoint { get; internal set; }
+
     public bool PendingRemoval { get; internal set; }
 
     public bool IsAlive => Health > 0 && !PendingRemoval;
