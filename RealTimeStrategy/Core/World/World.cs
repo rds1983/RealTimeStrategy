@@ -24,6 +24,7 @@ public sealed class World
     {
         _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
         Rng = new Random(seed);
+        Spatial = new SpatialGrid(MapGrid.MapSize, MapGrid.CellSize);
 
         _players[PlayerId.Player] = new PlayerState(PlayerId.Player, FactionId.Concord);
         _players[PlayerId.Enemy] = new PlayerState(PlayerId.Enemy, FactionId.Null);
@@ -36,6 +37,9 @@ public sealed class World
     public IReadOnlyList<Entity> Entities => _entities;
 
     public IReadOnlyDictionary<PlayerId, PlayerState> Players => _players;
+
+    /// <summary>Proximity index rebuilt at the end of every <see cref="Step"/>.</summary>
+    public SpatialGrid Spatial { get; }
 
     public long TickCount { get; private set; }
 
@@ -101,6 +105,7 @@ public sealed class World
 
         ApplyCommands();
         RemoveDeadEntities();
+        Spatial.Rebuild(_entities);
         TickCount++;
     }
 

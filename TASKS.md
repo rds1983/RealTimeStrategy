@@ -82,17 +82,17 @@ Goal: deterministic headless world with movement and orders.
   - Add the entity count to the debug overlay panel (T-002).
   - Acceptance: spawn/despawn/checksum tests; same seed + commands = identical checksum.
 
-- [ ] **T-010 — Spatial grid and queries**
+- [x] **T-010 — Spatial grid and queries**
   - Uniform grid for entity range queries, rebuilt or updated incrementally per tick.
   - APIs for radius query, nearest enemy, neighbors for separation.
   - Acceptance: results match brute force on randomized cases; 300-unit query benchmark stays under budget.
 
 - [ ] **T-011 — Navigation grid and A***
-  - `NavGrid` (60 × 60 cells), blockers from structures/nodes/map edges, 8-way A* without corner cutting, line-of-sight path smoothing.
+  - `NavGrid` (60 × 60 cells, same 2-unit `MapGrid` cells but separate from `SpatialGrid`), blockers from structures/nodes/map edges, 8-way A* without corner cutting, line-of-sight path smoothing.
   - Acceptance: path found/blocked cases, no diagonal wall clipping, path length ≤ 1.3× optimal on test maps.
 
 - [ ] **T-012 — Movement and steering**
-  - Waypoint following, acceleration/deceleration, separation, stuck detection and repath, facing/rotation toward velocity.
+  - Waypoint following, acceleration/deceleration, separation via `World.Spatial` neighbor queries, stuck detection and repath, facing/rotation toward velocity.
   - Acceptance: units reach destinations within tolerance, do not pile on one point, recover from blocked paths in tests.
 
 - [ ] **T-013 — Orders and command queue**
@@ -180,7 +180,7 @@ Goal: readable, testable combat that decides the match.
   - Acceptance: table-driven damage tests from `GameDesign.md`; minimum damage 1; no damage from dead attackers.
 
 - [ ] **T-028 — Targeting and auto-acquire**
-  - Acquisition range, target scoring (nearest, in range), leash return to previous order, no target through structures for units (unless attacking the structure).
+  - Acquisition range, target scoring (nearest, in range) via `World.Spatial.FindNearestEnemy`, leash return to previous order, no target through structures for units (unless attacking the structure).
   - Acceptance: acquire/leash/reacquire tests; idle units defend themselves; ordered attack persists until target dies.
 
 - [ ] **T-029 — Projectiles and impacts**
@@ -311,3 +311,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-007 | Ground, build grid and blob shadows | 2026-11-20 | 38ce3cf |
 | T-008 | Definitions and balance data | 2026-11-20 | b4cdaae |
 | T-009 | World, entities and players | 2026-11-20 | 6130721 |
+| T-010 | Spatial grid and queries | 2026-11-20 | _pending_ |

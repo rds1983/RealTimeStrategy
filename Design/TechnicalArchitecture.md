@@ -30,8 +30,8 @@ RealTimeStrategy/
     GameInfo.cs                  title/version metadata, safe for headless tests
     Simulation/                  SimulationClock (fixed-step accumulator)
     World/MapGrid.cs             map size, 2-unit cell conversion (unit tested)
-    World/                       World, Entity, PlayerState, EntityId, command records,
-                                 snapshots + deterministic checksum (unit tested)
+    World/                       World, Entity, PlayerState, EntityId, SpatialGrid,
+                                 command records, snapshots + checksum (unit tested)
     Orders/                      Order types, OrderQueue, order execution
     Navigation/                  NavGrid, AStar, Path, flow helpers
     Movement/                    locomotion, separation, path following
@@ -132,7 +132,8 @@ The game project is an `Exe` (console attached) during development so logs and c
 - `World` owns the `DefinitionRegistry`, a seeded `Random`, both players, an ordered `List<Entity>` + id lookup, and a `WorldCommand` queue. `Step(dt)` copies previous positions, applies commands, removes dead/despawned entities at tick end, then increments the tick.
 - Commands are data records (`SpawnUnit`, `SpawnBuilding`, `Damage`, `Despawn`) applied only at tick start. Unknown targets are ignored; invalid commands never throw mid-tick.
 - `ComputeChecksum()` is a deterministic FNV-1a hash of tick, players and entities; `CreateSnapshot()` returns immutable entity/player snapshots for tests and replay tooling.
-- A spatial index for range queries is added in T-010.
+- `SpatialGrid` (T-010) hashes living entities into the same 2-unit `MapGrid` cells and is rebuilt at the end of every `Step`. It exposes radius queries (span or reused `List`, no per-query allocation), `FindNearestEnemy`, and `Count`; `World.Spatial` reflects the last completed tick.
+- A separate navigation grid for pathfinding is added in T-011; the spatial hash only answers proximity queries.
 
 ### Navigation and movement
 
@@ -257,6 +258,7 @@ Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count 
 - **Unit tests** (`RealTimeStrategy.Tests`): definitions/validation, economy math, harvesting, supply, production queues, construction/refund, damage formula, targeting/leash, order transitions, pathfinding, win/lose conditions, AI deterministic smoke runs.
 - **Headless world tests:** `new World(registry, seed)`, enqueue commands, `Step(0.05f)` N times, assert state. No graphics, no clock.
 - **World:** spawn commands apply at tick start, id lookup and map clamping, supply used/cap updates and release on removal, despawn/lethal damage deferred to tick end, unknown targets ignored, resource/tick-sensitive FNV checksums, immutable snapshots, and seeded RNG reproducibility.
+- **Spatial grid:** randomized radius queries match brute force, nearest-enemy ignores allies and range, rebuild drops despawned entities, span queries report total matches even with a small buffer, map-edge queries stay in bounds, and 1,000 radius queries over 300 units complete in ~4 ms (budget 200 ms in the test).
 - **Determinism test:** run the same seed + command script twice and compare a world checksum/snapshot.
 - **Timing tests:** `SimulationClock` covers 20 Hz accumulation across 60/20 FPS frame patterns, partial ticks and alpha, invalid elapsed input, and the 5-step catch-up clamp (excess time dropped, not banked).
 - **Rendering math:** `CameraView` tests cover frustum visibility (origin, behind camera, outside FOV, beyond far plane, near-plane intersection), world-matrix bounds culling, `LookAt` changes, aspect/projection and invalid input.
