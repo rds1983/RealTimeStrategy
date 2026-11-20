@@ -318,4 +318,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-014 | Picking and hover | 2026-11-20 | 21b9a9d |
 | T-015 | Selection and control groups | 2026-11-20 | 5e3c909 |
 | T-016 | Order issuing | 2026-11-20 | cdf5122 |
-| T-017 | Selection and order visuals | 2026-11-20 | _pending_ |
+| T-017 | Selection and order visuals | 2026-11-20 | 14df995 |
