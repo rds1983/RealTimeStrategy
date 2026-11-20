@@ -41,7 +41,7 @@ RealTimeStrategy/
     Math/                        fixed math helpers, geometry queries
   Presentation/                  rendering, input, UI and platform glue
     Content/AssetPaths.cs        resolves runtime Myra asset root
-    Rendering/                   renderer, models and debug overlay host
+    Rendering/                   renderer, models, shared Myra desktop host
       SceneRenderer.cs           draw list, culling, BasicEffect
       MeshLibrary.cs             device-backed procedural primitive cache
       MeshKey.cs                 value key for cached shapes
@@ -49,13 +49,16 @@ RealTimeStrategy/
       ModelFactory.cs            builds cached DrModel hierarchies per (id, palette)
       ModelId.cs                 unit/structure/prop identifiers
       FactionPalettes.cs         Concord / Null / Neutral colors
+      GameUi.cs                  one Desktop, HUD + debug panels, pointer-over-HUD
     Ui/                          Myra markup, generated panels, HUD binding, screens
-      DebugOverlay.xmmp          design-time markup (not shipped, not loaded at runtime)
+      GameHud.xmmp               controls legend markup
+      GameHudPanel.cs / .Generated.cs
+      DebugOverlay.xmmp          debug stats markup (not shipped, not loaded at runtime)
       DebugOverlayPanel.cs       hand-written runtime behavior (kept by the exporter)
       DebugOverlayPanel.Generated.cs  myra-export output (never edit by hand)
     Input/                       input state, picking, selection controller, command controller
     Camera/CameraView.cs         view/projection matrices + frustum culling (unit tested)
-    Camera/                      RtsCamera (T-006)
+    Camera/RtsCamera.cs          focus/yaw/zoom controller, map clamping, focus helpers
     Audio/                       placeholder SFX hooks
   Data/                          JSON map/balance overrides (optional, later)
 RealTimeStrategy.Tests/          xUnit, ProjectReference to the game project
@@ -149,7 +152,7 @@ Later passes add the textured/grid ground (T-007), blob shadows, units/structure
 ### Renderer details
 
 - **Coordinates:** right-handed (`Matrix.CreateLookAt` + `CreatePerspectiveFieldOfView`), default `toLeftHanded: false` DigitalRiseModel primitives, `CullMode.CullCounterClockwiseFace`.
-- **Lens:** 45° vertical FOV, near 0.5, far 500. The gallery camera is currently at `(24, 32, 36)` looking at `(0, 2, -1)`; `RtsCamera` (T-006) will drive the same `CameraView`.
+- **Lens:** 45° vertical FOV, near 0.5, far 500. `RtsCamera` drives the `CameraView`; the gallery starts at focus `(0, 0)` and distance 69 so every model fits.
 - **Lighting:** `BasicEffect` with per-pixel lighting, ambient `0.42`, one directional light (`0.78`, direction `(-0.45, -1, -0.35)`), specular `0.08` / power 24. No textures yet.
 - **Draw list:** `SceneRenderer` keeps a preallocated `List<MeshDrawCommand>` of `(DrMeshPart, world matrix, diffuse, emissive)`; no per-frame allocation once the list capacity is reached. `SubmittedCount` / `CulledCount` / `DrawnCount` are exposed for debugging.
 - **Model gallery:** `VectorFrontGame.CreateModelGallery` lays out every MVP model: five Concord structures, four units in each faction palette, an alloy node, a projectile and debris, on the 120 × 120 ground plane. It exists only to validate silhouettes/palettes and is replaced once the world supplies entities. The gallery currently uses 90 cached meshes for 16 `DrModel` instances and ~90 draw calls.
@@ -169,7 +172,17 @@ Later passes add the textured/grid ground (T-007), blob shadows, units/structure
 
 ### Camera
 
-`CameraView` (T-003) owns the view/projection matrices and a `BoundingFrustum`, with `SetViewport`, `LookAt` and two `IsVisible` overloads (sphere, or local bounds + world matrix). It is pure math and unit tested. `RtsCamera` (T-006) keeps focus point, yaw, pitch (fixed 55°), distance (20–80) and feeds a `CameraView`; pan uses arrow keys, edge scroll or middle-mouse drag, rotation snaps in 45° steps, bounds clamp to the map plus a margin.
+`CameraView` (T-003) owns the view/projection matrices and a `BoundingFrustum`, with `SetViewport`, `LookAt` and two `IsVisible` overloads (sphere, or local bounds + world matrix). It is pure math and unit tested.
+
+`RtsCamera` (T-006) drives it:
+
+- **Pose:** ground focus point, fixed 55° pitch, yaw requested in 45° steps (`Q`/`E`) and eased toward the target at 14/s (snaps within 0.01 rad), distance 20–80 with 45 as the gameplay default. Camera position is `focus + (distance·cos(pitch)·sin(yaw), distance·sin(pitch), distance·cos(pitch)·cos(yaw))`.
+- **Pan:** arrow keys and an 8 px edge zone (plus middle-mouse drag) move focus in camera-relative axes. Speed is `45 u/s × distance / 45`, so panning feels consistent at any zoom. Focus clamps to the map (`±60` on X/Z).
+- **Zoom:** mouse wheel notches adjust a target distance by 6 units; `Update(dt)` smooths toward it with a 12/s exponential and snaps under 0.01 units.
+- **Drag:** middle-mouse drag converts pixels to world units at the focus plane via `WorldUnitsPerPixel(viewportHeight)` and grabs the map (inverse X, forward Y).
+- **API:** `FocusOn(point)` (flattens Y to the ground) is ready for `H`/`Space`/minimap bindings in T-015; `Rotate`, `Pan`, `PanBy`, `Zoom`, `Update`.
+- **Gallery:** the temporary model gallery starts at distance 69 so all models fit; T-009 returns to the 45 gameplay default. Smoke runs ignore camera input so screenshots are deterministic.
+- **Debug overlay:** `Focus x, z | dist` is refreshed with the other stats at 4 Hz.
 
 ### Picking
 
@@ -189,8 +202,12 @@ Screen ray → ground plane for world position; entity picking uses distance-to-
 - Export options are stored in the markup: `Namespace`, `Class` and `FieldsVisibility="Private"`. Generated widget fields are private; the hand-written partial accesses them because it is the same class. Add `FieldsVisibility` to any new `.xmmp`.
 - Myra's asset manager is rooted at `<exe>/Presentation/Ui` (created at startup), mirroring the source folder. That keeps the relative paths stored by the exporter valid at runtime: `../../Assets/Fonts/Rajdhani-Regular.ttf:16` resolves to `RealTimeStrategy/Assets/...` during export and to `<exe>/Assets/...` at runtime. No path rewriting is needed.
 - Font syntax in MML is `<path>:<size>` for TTF/OTF. Color strings are `#RRGGBBAA` — alpha is **last**, unlike XNA's packed color format.
-- `DebugOverlay` hosts the generated `DebugOverlayPanel` (a `VerticalStackPanel` of labels) inside a transparent full-screen `Panel`; the panel itself is anchored top-left with a translucent `#040810C8` backdrop and content-sized. The panel's runtime behavior (stats, refresh, toggle) lives in the hand-written `DebugOverlayPanel.cs` partial, not in the generated file.
-- HUD shell, theme stylesheet, and input routing (`Desktop.IsMouseOverGUI`) arrive in T-034. Until then the debug overlay is the only Myra consumer.
+- `GameUi` owns the single Myra `Desktop` and a transparent full-screen host `Panel`. It hosts:
+  - `GameHudPanel` — always-visible top-right controls legend (pan/zoom/rotate/debug/quit);
+  - `DebugOverlayPanel` — top-left stats, toggled with `F1`; its runtime behavior lives in the hand-written partial.
+- Panel backgrounds use `#040810B4` / `#040810C8` (dark blue with alpha). Remember Myra's `#RRGGBBAA` order; a red panel means the color was written as `#AARRGGBB`.
+- `GameUi.IsPointerOverHud(Point)` reports whether the cursor is over the HUD so camera edge-pan and middle-drag are suppressed there. Full UI/world input routing (clicks, selection, modals) arrives in T-034.
+- HUD shell, resource bar, minimap and command card arrive with their systems; the current HUD intentionally shows only controls that exist.
 
 ---
 
@@ -226,6 +243,7 @@ Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count 
 - **Determinism test:** run the same seed + command script twice and compare a world checksum/snapshot.
 - **Timing tests:** `SimulationClock` covers 20 Hz accumulation across 60/20 FPS frame patterns, partial ticks and alpha, invalid elapsed input, and the 5-step catch-up clamp (excess time dropped, not banked).
 - **Rendering math:** `CameraView` tests cover frustum visibility (origin, behind camera, outside FOV, beyond far plane, near-plane intersection), world-matrix bounds culling, `LookAt` changes, aspect/projection and invalid input.
+- **RTS camera:** 15 tests cover defaults, distance/pitch, camera-relative panning, distance-scaled pan speed, map clamping, focus flattening, 45° yaw requests with smooth easing/wrapping, zoom clamping/smoothing, world-units-per-pixel, invalid bounds and viewport.
 - **Mesh cache:** equal keys reuse one mesh, different keys create separate meshes, disposal releases every cached mesh exactly once, access after dispose throws, and the key includes every shape parameter with neutral defaults.
 - **Model gallery (manual):** every `ModelId` appears with a distinct silhouette and correct palette; accents stay colored (not white); smoke output reports mesh/model counts (`90` meshes / `16` models at the time of writing).
 - **Manual smoke checklist** for rendering/UI tasks: window opens, camera pans/zooms, models visible with correct colors, no exceptions in log, 60 FPS.

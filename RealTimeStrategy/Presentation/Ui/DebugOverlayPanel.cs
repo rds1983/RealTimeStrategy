@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.Xna.Framework;
 using RealTimeStrategy.Core;
 using RealTimeStrategy.Core.Simulation;
 
@@ -23,6 +24,8 @@ public partial class DebugOverlayPanel
     private long _tickCount;
     private float _interpolationAlpha;
     private float _tickRate = SimulationClock.DefaultTickRate;
+    private Vector3 _cameraFocus;
+    private float _cameraDistance;
 
     public DebugOverlayPanel()
     {
@@ -44,11 +47,19 @@ public partial class DebugOverlayPanel
 
     public void Toggle() => SetVisible(!Visible);
 
-    public void UpdateStatistics(double elapsedSeconds, long tickCount, float interpolationAlpha, float tickRate)
+    public void UpdateStatistics(
+        double elapsedSeconds,
+        long tickCount,
+        float interpolationAlpha,
+        float tickRate,
+        Vector3 cameraFocus,
+        float cameraDistance)
     {
         _tickCount = tickCount;
         _interpolationAlpha = interpolationAlpha;
         _tickRate = tickRate;
+        _cameraFocus = cameraFocus;
+        _cameraDistance = cameraDistance;
 
         if (elapsedSeconds > 0 && !double.IsNaN(elapsedSeconds) && !double.IsInfinity(elapsedSeconds))
         {
@@ -92,5 +103,9 @@ public partial class DebugOverlayPanel
         _simulationLabel.Text = string.Create(
             CultureInfo.InvariantCulture,
             $"Sim {_tickRate:0} Hz  |  tick {_tickCount}  |  alpha {_interpolationAlpha:0.00}");
+
+        _cameraLabel.Text = string.Create(
+            CultureInfo.InvariantCulture,
+            $"Focus {_cameraFocus.X:0.0}, {_cameraFocus.Z:0.0}  |  dist {_cameraDistance:0}");
     }
 }

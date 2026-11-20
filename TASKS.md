@@ -53,7 +53,7 @@ Goal: a window with a lit 3D scene, a working camera and a testable build.
   - Faction palettes (Concord cyan / Null magenta) with emissive accents.
   - Acceptance: every model is visible, distinguishable at default zoom, and documented in `Design/GameDesign.md` if silhouettes change.
 
-- [ ] **T-006 — RTS camera**
+- [x] **T-006 — RTS camera**
   - Focus point + yaw/pitch/distance; arrow keys/edge pan, MMB drag, wheel zoom (20–80), Q/E 45° yaw steps, map clamping.
   - Drive the existing `CameraView` (replace the fixed reference camera in `VectorFrontGame`).
   - Expose `FocusOn(point)` for entity-bound keys, wired in T-015.
@@ -110,7 +110,7 @@ Goal: the player can select and command units with the mouse.
   - Acceptance: picking tests with known camera setups; hover works at all zoom levels; input routing leaves room for HUD exclusion in T-034.
 
 - [ ] **T-015 — Selection and control groups**
-  - Click select, drag box (shift adds), structures vs. units rules, `Ctrl+1…9` assignment and recall, `Backspace` focuses the Nexus and `Space` the selection.
+  - Click select, drag box (shift adds), structures vs. units rules, `Ctrl+1…9` assignment and recall, `Backspace` focuses the Nexus and `Space` the selection via `RtsCamera.FocusOn`.
   - Acceptance: selection tests (empty box, mixed selection, dead entities pruned); control groups survive deaths.
 
 - [ ] **T-016 — Order issuing**
@@ -209,10 +209,10 @@ Goal: readable, testable combat that decides the match.
 
 Goal: a complete, understandable interface.
 
-- [ ] **T-034 — HUD root, theme and input routing**
-  - Replace the overlay-only host with a full-screen HUD root on the shared `Desktop`: debug panel + HUD layers, theme stylesheet/fonts, and a documented UI asset layout.
-  - Route input: clicks over `Desktop.IsMouseOverGUI` must not reach world picking/orders; keyboard shortcuts remain game-side; modal/focus rules defined.
-  - Acceptance: HUD and debug overlay coexist; a test label renders over the 3D view; clicks on HUD never select or issue orders; no MGCB dependency; empty HUD consumes no input.
+- [ ] **T-034 — HUD layout, theme and input routing**
+  - Keep the shared `GameUi` desktop; add the full-screen HUD structure (top bar, bottom panels), a Myra stylesheet/theme, and relocate the controls legend into a help panel or keep it unobtrusive.
+  - Implement full UI input routing: clicks over any HUD widget must not reach world picking/orders; modal/focus rules; edge-pan and drag suppressed over UI where appropriate.
+  - Acceptance: HUD + debug overlay coexist; a test label renders over the 3D view; clicks on HUD never select or issue orders; keyboard shortcuts remain game-side; empty HUD consumes no input; no MGCB dependency.
 
 - [ ] **T-035 — Top resource bar**
   - Alloy, energy current/cap, supply used/cap, match timer with icons/glyphs.
@@ -307,3 +307,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-003 | 3D rendering foundation | 2026-11-20 | 673c8ad |
 | T-004 | Procedural mesh library | 2026-11-20 | c6a4323 |
 | T-005 | Model factory and palette | 2026-11-20 | 5dd25b3 |
+| T-006 | RTS camera, smooth rotation and controls HUD | 2026-11-20 | _pending_ |

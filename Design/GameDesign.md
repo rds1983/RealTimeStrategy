@@ -189,7 +189,7 @@ damage = max(1, weaponDamage × classMultiplier − targetArmor)
 
 ## 9. Camera and controls
 
-Camera: perspective, 45° field of view, pitch 55°, default yaw 45°, distance 20–80 units (default 45). Pan with arrow keys, edge scroll or middle-mouse drag; `A`/`S`/`H` are reserved for combat commands, so WASD is not used for panning.
+Camera: perspective, 45° field of view, pitch 55°, default yaw 45°, distance 20–80 units (default 45) with smooth wheel zoom. Pan with arrow keys, edge scroll or middle-mouse drag; `A`/`S`/`H` are reserved for combat commands, so WASD is not used for panning.
 
 | Input | Action |
 | --- | --- |
@@ -242,6 +242,8 @@ Selection rules:
 - **Command card** — contextual 3×3 grid of build/produce/stop/attack-move buttons; disabled buttons show why (cost, supply, requirement, queue full).
 - **Notifications** — "Not enough alloy", "Supply blocked", "Construction complete", "Under attack", "Nexus lost".
 - **End screen** — VICTORY / DEFEAT with match time, units built/lost summary and Restart.
+
+**Current prototype:** the HUD shows an always-visible controls legend in the top-right corner (pan/zoom/rotate/debug/quit) plus the optional `F1` debug panel. Resource bar, minimap, selection panel and command card are added with the systems they represent; they must not be faked earlier.
 
 ---
 

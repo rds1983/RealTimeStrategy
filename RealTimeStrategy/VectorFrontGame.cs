@@ -27,15 +27,18 @@ public sealed class VectorFrontGame : Game
     private readonly Stopwatch _wallClock = new();
 
     private SimulationClock _simulationClock = null!;
-    private DebugOverlay _debugOverlay = null!;
+    private GameUi _gameUi = null!;
     private SceneRenderer _sceneRenderer = null!;
     private CameraView _camera = null!;
+    private RtsCamera _rtsCamera = null!;
     private MeshLibrary _meshLibrary = null!;
     private ModelFactory _modelFactory = null!;
     private DrMesh _groundMesh = null!;
     private readonly List<SceneObject> _sceneObjects = new();
     private readonly List<GalleryItem> _gallery = new();
     private KeyboardState _previousKeyboard;
+    private MouseState _previousMouse;
+    private int _previousScrollValue;
     private int _drawnFrames;
 
     public VectorFrontGame(string[]? args = null)
@@ -67,8 +70,8 @@ public sealed class VectorFrontGame : Game
         MyraAssets.DefaultAssetManager = AssetManager.CreateFileAssetManager(AssetPaths.UiRoot);
 
         _simulationClock = new SimulationClock(SimulationClock.DefaultTickRate);
-        _debugOverlay = new DebugOverlay();
-        _debugOverlay.SetVisible(_startWithOverlay);
+        _gameUi = new GameUi();
+        _gameUi.SetDebugOverlayVisible(_startWithOverlay);
 
         CreateModelGallery();
 
@@ -77,7 +80,7 @@ public sealed class VectorFrontGame : Game
 
     protected override void UnloadContent()
     {
-        _debugOverlay.Dispose();
+        _gameUi.Dispose();
         _sceneRenderer.Dispose();
         _meshLibrary.Dispose();
 
@@ -90,7 +93,7 @@ public sealed class VectorFrontGame : Game
 
         if (keyboard.IsKeyDown(Keys.F1) && _previousKeyboard.IsKeyUp(Keys.F1))
         {
-            _debugOverlay.Toggle();
+            _gameUi.ToggleDebugOverlay();
         }
 
         if (keyboard.IsKeyDown(Keys.Escape))
@@ -105,11 +108,23 @@ public sealed class VectorFrontGame : Game
             StepSimulation(_simulationClock.TickInterval);
         }
 
-        _debugOverlay.Update(
+        if (_smokeTestFrameLimit is null)
+        {
+            UpdateCamera(keyboard, elapsedSeconds);
+        }
+        else
+        {
+            // Smoke runs are deterministic: no mouse/keyboard camera input.
+            _rtsCamera.Update((float)elapsedSeconds);
+        }
+
+        _gameUi.UpdateDebugStats(
             elapsedSeconds,
             _simulationClock.TickCount,
             _simulationClock.Alpha,
-            SimulationClock.DefaultTickRate);
+            SimulationClock.DefaultTickRate,
+            _rtsCamera.Focus,
+            _rtsCamera.Distance);
 
         _previousKeyboard = keyboard;
         base.Update(gameTime);
@@ -134,7 +149,7 @@ public sealed class VectorFrontGame : Game
 
         _sceneRenderer.Render();
 
-        _debugOverlay.Draw();
+        _gameUi.Draw();
 
         if (_smokeTestFrameLimit is int limit)
         {
@@ -171,7 +186,15 @@ public sealed class VectorFrontGame : Game
         _camera.SetViewport(
             GraphicsDevice.PresentationParameters.BackBufferWidth,
             GraphicsDevice.PresentationParameters.BackBufferHeight);
-        _camera.LookAt(new Vector3(24f, 32f, 36f), new Vector3(0f, 2f, -1f));
+        _rtsCamera = new RtsCamera(
+            _camera,
+            new Vector2(-60f, -60f),
+            new Vector2(60f, 60f));
+        _rtsCamera.Zoom(-4f);
+        _rtsCamera.Update(10f);
+
+        _previousMouse = Mouse.GetState();
+        _previousScrollValue = _previousMouse.ScrollWheelValue;
 
         _groundMesh = _meshLibrary.GetPlane(new Vector2(120f, 120f));
         _sceneObjects.Add(new SceneObject(_groundMesh, Matrix.Identity, new Color(28, 34, 48)));
@@ -208,6 +231,72 @@ public sealed class VectorFrontGame : Game
         _gallery.Add(new GalleryItem(
             _modelFactory.Get(id, palette),
             Matrix.CreateTranslation(x, y, z)));
+    }
+
+    private void UpdateCamera(KeyboardState keyboard, double elapsedSeconds)
+    {
+        var delta = (float)elapsedSeconds;
+        var mouse = Mouse.GetState();
+        var viewport = GraphicsDevice.Viewport;
+
+        if (IsActive)
+        {
+            var pan = Vector2.Zero;
+            if (keyboard.IsKeyDown(Keys.Left)) pan.X -= 1f;
+            if (keyboard.IsKeyDown(Keys.Right)) pan.X += 1f;
+            if (keyboard.IsKeyDown(Keys.Up)) pan.Y += 1f;
+            if (keyboard.IsKeyDown(Keys.Down)) pan.Y -= 1f;
+
+            const int edge = 8;
+            var bounds = viewport.Bounds;
+            var pointerOverHud = _gameUi.IsPointerOverHud(mouse.Position);
+            if (bounds.Contains(mouse.Position) && !pointerOverHud)
+            {
+                if (mouse.X <= bounds.Left + edge) pan.X -= 1f;
+                else if (mouse.X >= bounds.Right - 1 - edge) pan.X += 1f;
+
+                if (mouse.Y <= bounds.Top + edge) pan.Y += 1f;
+                else if (mouse.Y >= bounds.Bottom - 1 - edge) pan.Y -= 1f;
+            }
+
+            if (pan != Vector2.Zero)
+            {
+                _rtsCamera.Pan(pan, delta);
+            }
+
+            if (keyboard.IsKeyDown(Keys.Q) && _previousKeyboard.IsKeyUp(Keys.Q))
+            {
+                _rtsCamera.Rotate(1);
+            }
+
+            if (keyboard.IsKeyDown(Keys.E) && _previousKeyboard.IsKeyUp(Keys.E))
+            {
+                _rtsCamera.Rotate(-1);
+            }
+
+            if (!pointerOverHud &&
+                mouse.MiddleButton == ButtonState.Pressed &&
+                _previousMouse.MiddleButton == ButtonState.Pressed)
+            {
+                var dx = mouse.X - _previousMouse.X;
+                var dy = mouse.Y - _previousMouse.Y;
+                if (dx != 0 || dy != 0)
+                {
+                    var unitsPerPixel = _rtsCamera.WorldUnitsPerPixel(viewport.Height);
+                    _rtsCamera.PanBy(new Vector2(-dx, dy) * unitsPerPixel);
+                }
+            }
+        }
+
+        var scroll = mouse.ScrollWheelValue;
+        if (IsActive && scroll != _previousScrollValue)
+        {
+            _rtsCamera.Zoom((scroll - _previousScrollValue) / 120f);
+        }
+
+        _previousScrollValue = scroll;
+        _previousMouse = mouse;
+        _rtsCamera.Update(delta);
     }
 
     /// <summary>

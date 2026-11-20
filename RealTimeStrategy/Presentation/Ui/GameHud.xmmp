@@ -1,0 +1,11 @@
+<Project>
+  <Project.ExportOptions Namespace="RealTimeStrategy.Presentation.Ui" Class="GameHudPanel" FieldsVisibility="Private" />
+  <VerticalStackPanel Spacing="3" Padding="14" Background="#040810B4" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="16">
+    <Label Text="CONTROLS" Font="../../Assets/Fonts/Rajdhani-SemiBold.ttf:32" TextColor="#96E6FF" />
+    <Label Text="Pan   Arrows / screen edge / MMB drag" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
+    <Label Text="Zoom   Mouse wheel" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
+    <Label Text="Rotate   Q / E" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
+    <Label Text="Debug   F1" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
+    <Label Text="Quit   Esc" Font="../../Assets/Fonts/Rajdhani-Regular.ttf:26" TextColor="#C8F4FF" />
+  </VerticalStackPanel>
+</Project>
