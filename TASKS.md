@@ -309,4 +309,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-005 | Model factory and palette | 2026-11-20 | 5dd25b3 |
 | T-006 | RTS camera, smooth rotation and controls HUD | 2026-11-20 | 5e75f29 |
 | T-007 | Ground, build grid and blob shadows | 2026-11-20 | 38ce3cf |
-| T-008 | Definitions and balance data | 2026-11-20 | _pending_ |
+| T-008 | Definitions and balance data | 2026-11-20 | b4cdaae |
