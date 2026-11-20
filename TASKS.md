@@ -105,16 +105,16 @@ Goal: deterministic headless world with movement and orders.
 
 Goal: the player can select and command units with the mouse.
 
-- [ ] **T-014 — Picking and hover**
+- [x] **T-014 — Picking and hover**
   - Screen ray → ground plane, entity hit test with bounding radius, units prioritized over structures, hover highlight.
   - Acceptance: picking tests with known camera setups; hover works at all zoom levels; input routing leaves room for HUD exclusion in T-034.
 
 - [ ] **T-015 — Selection and control groups**
-  - Click select, drag box (shift adds), structures vs. units rules, `Ctrl+1…9` assignment and recall, `Backspace` focuses the Nexus and `Space` the selection via `RtsCamera.FocusOn`.
+  - Click select via `Picking.PickEntity`, drag box (shift adds), structures vs. units rules, `Ctrl+1…9` assignment and recall, `Backspace` focuses the Nexus and `Space` the selection via `RtsCamera.FocusOn`.
   - Acceptance: selection tests (empty box, mixed selection, dead entities pruned); control groups survive deaths.
 
 - [ ] **T-016 — Order issuing**
-  - Right-click context orders issued through `World.TryIssueOrder` (move, attack, harvest, deposit, rally), `A` + click attack-move, `S` stop, `H` hold, contextual cursor feedback.
+  - Right-click context orders issued through `World.TryIssueOrder` (move, attack, harvest, deposit, rally), with world points from `Picking.TryGetGroundPoint`; `A` + click attack-move, `S` stop, `H` hold, contextual cursor feedback.
   - Acceptance: each order reaches the correct entity type (rally is stored for T-024); invalid targets ignored without deselecting; integration test drives a unit across the map.
 
 - [ ] **T-017 — Selection and order visuals**
@@ -211,7 +211,7 @@ Goal: a complete, understandable interface.
 
 - [ ] **T-034 — HUD layout, theme and input routing**
   - Keep the shared `GameUi` desktop; add the full-screen HUD structure (top bar, bottom panels), a Myra stylesheet/theme, and relocate the controls legend into a help panel or keep it unobtrusive.
-  - Implement full UI input routing: clicks over any HUD widget must not reach world picking/orders; modal/focus rules; edge-pan and drag suppressed over UI where appropriate.
+  - Implement full UI input routing: replace the HUD-rectangle check with `Desktop` hit-testing; clicks over any HUD widget must not reach world picking/orders; modal/focus rules; edge-pan and drag suppressed over UI where appropriate.
   - Acceptance: HUD + debug overlay coexist; a test label renders over the 3D view; clicks on HUD never select or issue orders; keyboard shortcuts remain game-side; empty HUD consumes no input; no MGCB dependency.
 
 - [ ] **T-035 — Top resource bar**
@@ -315,3 +315,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | T-011 | Navigation grid and A* | 2026-11-20 | f07ee62 |
 | T-012 | Movement and steering | 2026-11-20 | 0541a35 |
 | T-013 | Orders and command queue | 2026-11-20 | 1d3f056 |
+| T-014 | Picking and hover | 2026-11-20 | _pending_ |

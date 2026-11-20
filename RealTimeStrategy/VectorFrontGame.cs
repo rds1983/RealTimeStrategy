@@ -11,6 +11,7 @@ using RealTimeStrategy.Core.Simulation;
 using RealTimeStrategy.Core.World;
 using RealTimeStrategy.Presentation.Camera;
 using RealTimeStrategy.Presentation.Content;
+using RealTimeStrategy.Presentation.Input;
 using RealTimeStrategy.Presentation.Rendering;
 
 namespace RealTimeStrategy;
@@ -46,6 +47,7 @@ public sealed class VectorFrontGame : Game
     private MouseState _previousMouse;
     private int _previousScrollValue;
     private bool _showBuildGrid;
+    private Entity? _hoveredEntity;
     private int _drawnFrames;
 
     public VectorFrontGame(string[]? args = null)
@@ -126,6 +128,7 @@ public sealed class VectorFrontGame : Game
         if (_smokeTestFrameLimit is null)
         {
             UpdateCamera(keyboard, elapsedSeconds);
+            UpdateHover();
         }
         else
         {
@@ -183,6 +186,21 @@ public sealed class VectorFrontGame : Game
                 Matrix.CreateTranslation(position.X, 0.015f, position.Z);
 
             _sceneRenderer.SubmitTransparent(_shadowMesh, shadowWorld, Color.Black, alpha: 0.4f);
+        }
+
+        if (_hoveredEntity is { IsAlive: true } hovered)
+        {
+            var position = Vector3.Lerp(hovered.PreviousPosition, hovered.Position, interpolationAlpha);
+            var radius = hovered.Radius * 2.4f;
+            var hoverWorld =
+                Matrix.CreateScale(radius, 1f, radius) *
+                Matrix.CreateTranslation(position.X, 0.04f, position.Z);
+
+            _sceneRenderer.SubmitTransparent(
+                _shadowMesh,
+                hoverWorld,
+                new Color(95, 227, 255),
+                alpha: 0.55f);
         }
 
         if (_showBuildGrid)
@@ -318,8 +336,7 @@ public sealed class VectorFrontGame : Game
     }
 
     private void UpdateCamera(KeyboardState keyboard, double elapsedSeconds)
-    {
-        var delta = (float)elapsedSeconds;
+    {        var delta = (float)elapsedSeconds;
         var mouse = Mouse.GetState();
         var viewport = GraphicsDevice.Viewport;
 
@@ -383,9 +400,31 @@ public sealed class VectorFrontGame : Game
         _rtsCamera.Update(delta);
     }
 
-    /// <summary>
-    /// Fixed-rate simulation step. Entity and system updates are wired in later tasks.
-    /// </summary>
+    private void UpdateHover()
+    {
+        if (!IsActive)
+        {
+            _hoveredEntity = null;
+            return;
+        }
+
+        var mouse = Mouse.GetState();
+        var viewport = GraphicsDevice.Viewport;
+
+        if (!viewport.Bounds.Contains(mouse.Position) || _gameUi.IsPointerOverHud(mouse.Position))
+        {
+            _hoveredEntity = null;
+            return;
+        }
+
+        _hoveredEntity = Picking.PickEntity(
+            _world,
+            _camera,
+            mouse.Position,
+            viewport.Width,
+            viewport.Height);
+    }
+
     private void StepSimulation(float deltaSeconds)
     {
         _world.Step(deltaSeconds);

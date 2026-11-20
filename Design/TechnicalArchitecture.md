@@ -59,7 +59,7 @@ RealTimeStrategy/
       DebugOverlay.xmmp          debug stats markup (not shipped, not loaded at runtime)
       DebugOverlayPanel.cs       hand-written runtime behavior (kept by the exporter)
       DebugOverlayPanel.Generated.cs  myra-export output (never edit by hand)
-    Input/                       input state, picking, selection controller, command controller
+    Input/                       input state, picking/selection controller, command controller
     Camera/CameraView.cs         view/projection matrices + frustum culling (unit tested)
     Camera/RtsCamera.cs          focus/yaw/zoom controller, map clamping, focus helpers
     Audio/                       placeholder SFX hooks
@@ -209,7 +209,11 @@ Later passes add the textured/grid ground (T-007), blob shadows, units/structure
 
 ### Picking
 
-Screen ray → ground plane for world position; entity picking uses distance-to-ray vs. bounding radius, with units preferred over structures. Box selection projects unit positions to screen space and tests against the rectangle.
+- `Picking.GetRay` unprojects the cursor through `inverse(View * Projection)` (NDC with top-left screen coordinates) and returns a normalized world ray. `TryGetGroundPoint` intersects that ray with `y = 0`, rejecting rays that are parallel or point away from the ground.
+- `PickEntity` tests each living entity's vertical proxy sphere (center at `position + radius·up`, radius `2×entity radius`) and returns the closest unit; only if no unit is hit does it return the closest structure. Units take priority even when a structure is nearer.
+- Hover is refreshed every frame only when the window is active, the cursor is inside the client area and not over the HUD. The hover highlight is a cyan translucent disc at `y = 0.04`, drawn in the transparent pass.
+- Picking is pure presentation math over `World`/`CameraView` and covered by known-camera tests at 20/45/80 zoom; box selection and click-to-select integration arrive in T-015.
+- Input routing currently checks the HUD rectangle; full `Desktop`-based routing is T-034.
 
 ---
 
@@ -268,6 +272,7 @@ Debug overlay (`F1`) currently shows FPS, frame ms, simulation rate, tick count 
 - **Navigation:** nav-grid blocking/count/footprints and line-of-sight (including diagonal corner rejection); A* straights, diagonals, walls, blocked endpoints, corner traps, smoothing, world-space output, and building footprints blocking/unblocking in `World.Navigation`; 25 random obstacle maps compare path cost against reference Dijkstra within 1.3×.
 - **Movement:** arrival within tolerance and stop, facing toward velocity, wall detours, mid-route blocking with successful repath, rejection of blocked destinations/buildings, stop semantics, previous-position interpolation, five-unit anti-stacking (no pair closer than 1 unit) and deterministic movement checksums.
 - **Orders:** tick-start application, queue completion, sequential queued moves, replace semantics, capacity 4, stop/hold position retention, invalid targets/points/types/buildings, dead-target rejection and mid-queue replacement.
+- **Picking:** ground point from a known camera, center-ray unit hit, misses, closest-unit selection, unit-over-structure priority, working at 20/45/80 zoom, dead entities ignored, empty world, and invalid viewport rejection.
 - **Determinism test:** run the same seed + command script twice and compare a world checksum/snapshot.
 - **Timing tests:** `SimulationClock` covers 20 Hz accumulation across 60/20 FPS frame patterns, partial ticks and alpha, invalid elapsed input, and the 5-step catch-up clamp (excess time dropped, not banked).
 - **Rendering math:** `CameraView` tests cover frustum visibility (origin, behind camera, outside FOV, beyond far plane, near-plane intersection), world-matrix bounds culling, `LookAt` changes, aspect/projection and invalid input.
