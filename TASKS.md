@@ -303,4 +303,4 @@ Filled in by the agent **after** developer confirmation (see `AGENTS.md`).
 | --- | --- | --- | --- |
 | T-001 | Solution scaffold | 2026-11-20 | 7f86ca2 |
 | T-002 | Application shell and fixed-step loop | 2026-11-20 | 3801db7 |
-| T-003 | 3D rendering foundation | 2026-11-20 | _pending_ |
+| T-003 | 3D rendering foundation | 2026-11-20 | 673c8ad |
